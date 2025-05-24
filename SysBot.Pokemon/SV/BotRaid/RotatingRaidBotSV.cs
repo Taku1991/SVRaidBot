@@ -2820,8 +2820,8 @@ namespace SysBot.Pokemon.SV.BotRaid
             }
 
             string disclaimer = _settings.ActiveRaids.Count > 1
-                                ? $"notpaldea.net"
-                                : "";
+                                ? $"Hideout"
+                                : string.Empty;
 
             var turl = string.Empty;
             Log($"Rotation Count: {RotationCount} | Species is {_settings.ActiveRaids[RotationCount].Species}");
