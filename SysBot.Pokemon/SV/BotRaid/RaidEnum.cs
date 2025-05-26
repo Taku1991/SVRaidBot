@@ -104,6 +104,14 @@ namespace SysBot.Pokemon
         _10000 = 10000 // Everything SS
     }
 
+    public enum RaidCodeCaseOptions
+    {
+        [Description("Lowercase (abcd)")]
+        Lowercase,
+        [Description("Uppercase (ABCD)")]
+        Uppercase
+    }
+
     public enum RequestEmbedTimingOptions
     {
         _2500 = 2500,

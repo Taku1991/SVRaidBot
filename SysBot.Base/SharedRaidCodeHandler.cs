@@ -12,7 +12,7 @@ namespace SysBot.Base;
 public static class SharedRaidCodeHandler
 {
     private static readonly Dictionary<ulong, RaidMessageInfo> _activeRaidMessages = new();
-    private static readonly object _lock = new object();
+    private static readonly object _lock = new();
 
     /// <summary>
     /// Determines whether Discord integration should be used

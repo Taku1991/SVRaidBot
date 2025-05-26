@@ -584,36 +584,32 @@ namespace SysBot.Pokemon
             [DisplayName("Lobby Method")]
             public LobbyMethodOptions LobbyMethod { get; set; } = LobbyMethodOptions.SkipRaid;
 
-            private int _raidLimit = 3;
+            private int _emptyRaidLimit = 3;
+            private int _skipRaidLimit = 3;
 
             [Category(Hosting), Description("Empty raid limit per parameter before the bot hosts an uncoded raid. Value must be between 1 and 3.")]
             [DisplayName("Empty Raid Limit")]
             public int EmptyRaidLimit
             {
-                get => _raidLimit;
-                set => SetRaidLimit(value);
+                get => _emptyRaidLimit;
+                set => _emptyRaidLimit = Math.Max(1, Math.Min(3, value));
             }
 
             [Category(Hosting), Description("Empty/Lost raid limit per parameter before the bot moves on to the next one. Value must be between 1 and 3.")]
             [DisplayName("Skip Raid Limit")]
             public int SkipRaidLimit
             {
-                get => _raidLimit;
-                set => SetRaidLimit(value);
+                get => _skipRaidLimit;
+                set => _skipRaidLimit = Math.Max(1, Math.Min(3, value));
             }
 
-            private void SetRaidLimit(int value)
-            {
-                _raidLimit = Math.Max(1, Math.Min(3, value));
-            }
-
-            [Category(FeatureToggle), Description("Set the action you would want your bot to perform. 'AFK' will make the bot idle, while 'MashA' presses A every 1s")]
+            [Category(FeatureToggle), Description("Set the action you would want your bot to perform. 'AFK' will make the bot idle, while 'MashA' presses A every 3.5s")]
             [DisplayName("A Button Action")]
             public RaidAction Action { get; set; } = RaidAction.MashA;
 
-            [Category(FeatureToggle), Description("Delay for the 'MashA' action in seconds.  [1 is default]")]
+            [Category(FeatureToggle), Description("Delay for the 'MashA' action in seconds.  [3.5 is default]")]
             [DisplayName("A Button Delay (Seconds)")]
-            public double MashADelay { get; set; } = 1;  // Default value set to 1.0 seconds
+            public double MashADelay { get; set; } = 3.5;  // Default value set to 3.5 seconds
 
             [Category(FeatureToggle), Description("Extra time in milliseconds to wait after Lobby Disbands in Raid before deciding to not capture the raidmon.")]
             [DisplayName("Extra Time To Disband Raid")]
@@ -622,6 +618,10 @@ namespace SysBot.Pokemon
             [Category(FeatureToggle), Description("Extra time in milliseconds to wait before changing partypk.")]
             [DisplayName("Extra Time to Prepare Raid Battler")]
             public int ExtraTimePartyPK { get; set; } = 0;
+
+            [Category(Hosting), Description("Choose whether raid codes should be displayed in uppercase or lowercase letters.")]
+            [DisplayName("Raid Code Letter Case")]
+            public RaidCodeCaseOptions RaidCodeCase { get; set; } = RaidCodeCaseOptions.Lowercase;
         }
 
         [Category(Hosting), TypeConverter(typeof(CategoryConverter<MiscSettingsCategory>))]
