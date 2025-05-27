@@ -1,363 +1,1161 @@
 ﻿using SysBot.Pokemon.WinForms.Properties;
 using System.Drawing;
 using System.Windows.Forms;
-
+using System.Drawing.Drawing2D;
+using System.Collections.Generic;
+using System.Linq;
+using System;
 
 namespace SysBot.Pokemon.WinForms
 {
     partial class Main
     {
-        /// <summary>
-        ///  Required designer variable.
-        /// </summary>
         private System.ComponentModel.IContainer components = null;
 
-        /// <summary>
-        ///  Clean up any resources being used.
-        /// </summary>
-        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null))
             {
                 components.Dispose();
             }
+            if (disposing && trayIcon != null)
+            {
+                trayIcon.Dispose();
+            }
             base.Dispose(disposing);
         }
 
         #region Windows Form Designer generated code
 
-        /// <summary>
-        ///  Required method for Designer support - do not modify
-        ///  the contents of this method with the code editor.
-        /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Main));
-            TC_Main = new TabControl();
-            Tab_Bots = new TabPage();
-            comboBox1 = new ComboBox();
-            CB_Protocol = new ComboBox();
-            FLP_Bots = new FlowLayoutPanel();
+
+            // Initialize timer for animations
+            animationTimer = new System.Windows.Forms.Timer(this.components);
+            animationTimer.Interval = 16; // ~60fps
+            animationTimer.Tick += AnimationTimer_Tick;
+
+            // Initialize tray icon
+            trayIcon = new NotifyIcon(this.components);
+            trayContextMenu = new ContextMenuStrip(this.components);
+
+            // Main Panel Structure
+            mainLayoutPanel = new TableLayoutPanel();
+            sidebarPanel = new Panel();
+            contentPanel = new Panel();
+            headerPanel = new Panel();
+            particlePanel = new Panel(); // Background particles
+
+            // Sidebar Components
+            logoPanel = new Panel();
+            navButtonsPanel = new FlowLayoutPanel();
+            btnNavBots = new Button();
+            btnNavHub = new Button();
+            btnNavLogs = new Button();
+            btnNavExit = new Button();
+            sidebarBottomPanel = new Panel();
+            btnUpdate = new Button();
+            statusIndicator = new Panel();
+
+            // Header Components
+            titleLabel = new Label();
+            controlButtonsPanel = new FlowLayoutPanel();
+            btnStart = new Button();
+            btnStop = new Button();
+            btnReboot = new Button();
+            btnRefreshMap = new Button();
+
+            // Content Panels
+            botsPanel = new Panel();
+            hubPanel = new Panel();
+            logsPanel = new Panel();
+
+            // Bots Panel Components
+            botHeaderPanel = new Panel();
+            addBotPanel = new Panel();
             TB_IP = new TextBox();
-            CB_Routine = new ComboBox();
             NUD_Port = new NumericUpDown();
+            CB_Protocol = new ComboBox();
+            CB_Routine = new ComboBox();
             B_New = new Button();
-            Tab_Hub = new TabPage();
+            FLP_Bots = new FlowLayoutPanel();
+
+            // Hub Panel Components
             PG_Hub = new PropertyGrid();
-            Tab_Logs = new TabPage();
+
+            // Logs Panel Components
             RTB_Logs = new RichTextBox();
-            B_Stop = new Button();
-            B_Start = new Button();
-            B_RebootAndStop = new Button();
-            updater = new Button();
-            ButtonPanel = new Panel();
-            B_RefreshMap = new Button();
-            TC_Main.SuspendLayout();
-            Tab_Bots.SuspendLayout();
+            logsHeaderPanel = new Panel();
+            logSearchBox = new TextBox();
+            btnClearLogs = new Button();
+
+            mainLayoutPanel.SuspendLayout();
+            sidebarPanel.SuspendLayout();
+            navButtonsPanel.SuspendLayout();
+            sidebarBottomPanel.SuspendLayout();
+            headerPanel.SuspendLayout();
+            controlButtonsPanel.SuspendLayout();
+            contentPanel.SuspendLayout();
+            botsPanel.SuspendLayout();
+            botHeaderPanel.SuspendLayout();
+            addBotPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)NUD_Port).BeginInit();
-            Tab_Hub.SuspendLayout();
-            Tab_Logs.SuspendLayout();
-            ButtonPanel.SuspendLayout();
+            hubPanel.SuspendLayout();
+            logsPanel.SuspendLayout();
+            logsHeaderPanel.SuspendLayout();
             SuspendLayout();
-            // 
-            // TC_Main
-            // 
-            TC_Main.Appearance = TabAppearance.FlatButtons;
-            TC_Main.Controls.Add(Tab_Bots);
-            TC_Main.Controls.Add(Tab_Hub);
-            TC_Main.Controls.Add(Tab_Logs);
-            TC_Main.Dock = DockStyle.Fill;
-            TC_Main.Font = new Font("Cambria", 11.25F, FontStyle.Bold, GraphicsUnit.Point, 0);
-            TC_Main.ItemSize = new Size(60, 45);
-            TC_Main.Location = new Point(0, 0);
-            TC_Main.Margin = new Padding(0);
-            TC_Main.Multiline = true;
-            TC_Main.Name = "TC_Main";
-            TC_Main.Padding = new Point(0, 0);
-            TC_Main.SelectedIndex = 0;
-            TC_Main.Size = new Size(734, 519);
-            TC_Main.TabIndex = 3;
-            // 
-            // Tab_Bots
-            // 
-            Tab_Bots.Controls.Add(comboBox1);
-            Tab_Bots.Controls.Add(CB_Protocol);
-            Tab_Bots.Controls.Add(FLP_Bots);
-            Tab_Bots.Controls.Add(TB_IP);
-            Tab_Bots.Controls.Add(CB_Routine);
-            Tab_Bots.Controls.Add(NUD_Port);
-            Tab_Bots.Controls.Add(B_New);
-            Tab_Bots.Location = new Point(4, 49);
-            Tab_Bots.Name = "Tab_Bots";
-            Tab_Bots.Size = new Size(726, 466);
-            Tab_Bots.TabIndex = 0;
-            Tab_Bots.Text = "Bots";
-            // 
-            // comboBox1
-            // 
-            comboBox1.DropDownStyle = ComboBoxStyle.DropDownList;
-            comboBox1.FormattingEnabled = true;
-            comboBox1.Location = new Point(525, 6);
-            comboBox1.Name = "comboBox1";
-            comboBox1.Size = new Size(192, 25);
-            comboBox1.TabIndex = 11;
-            comboBox1.SelectedIndexChanged += ComboBox1_SelectedIndexChanged;
-            // 
-            // CB_Protocol
-            // 
-            CB_Protocol.DropDownStyle = ComboBoxStyle.DropDownList;
-            CB_Protocol.ForeColor = Color.Red;
-            CB_Protocol.FormattingEnabled = true;
-            CB_Protocol.Location = new Point(291, 6);
-            CB_Protocol.Name = "CB_Protocol";
-            CB_Protocol.Size = new Size(67, 25);
-            CB_Protocol.TabIndex = 10;
-            CB_Protocol.SelectedIndexChanged += CB_Protocol_SelectedIndexChanged;
-            // 
-            // FLP_Bots
-            // 
-            FLP_Bots.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            FLP_Bots.BackColor = SystemColors.AppWorkspace;
-            FLP_Bots.BackgroundImage = (Image)resources.GetObject("FLP_Bots.BackgroundImage");
-            FLP_Bots.BackgroundImageLayout = ImageLayout.Center;
-            FLP_Bots.BorderStyle = BorderStyle.Fixed3D;
-            FLP_Bots.Font = new Font("Cambria", 12F);
-            FLP_Bots.Location = new Point(0, 37);
-            FLP_Bots.Margin = new Padding(0);
-            FLP_Bots.Name = "FLP_Bots";
-            FLP_Bots.Size = new Size(726, 430);
-            FLP_Bots.TabIndex = 9;
-            FLP_Bots.Paint += FLP_Bots_Paint;
-            FLP_Bots.Resize += FLP_Bots_Resize;
-            // 
-            // TB_IP
-            // 
-            TB_IP.Font = new Font("Courier New", 12F);
-            TB_IP.Location = new Point(73, 7);
-            TB_IP.Name = "TB_IP";
-            TB_IP.Size = new Size(134, 26);
-            TB_IP.TabIndex = 8;
-            TB_IP.Text = "192.168.0.1";
-            // 
-            // CB_Routine
-            // 
-            CB_Routine.DropDownStyle = ComboBoxStyle.DropDownList;
-            CB_Routine.FormattingEnabled = true;
-            CB_Routine.Location = new Point(364, 6);
-            CB_Routine.Name = "CB_Routine";
-            CB_Routine.Size = new Size(155, 25);
-            CB_Routine.TabIndex = 7;
-            // 
-            // NUD_Port
-            // 
-            NUD_Port.Font = new Font("Courier New", 12F);
-            NUD_Port.Location = new Point(215, 7);
-            NUD_Port.Maximum = new decimal(new int[] { 65535, 0, 0, 0 });
-            NUD_Port.Name = "NUD_Port";
-            NUD_Port.Size = new Size(68, 26);
-            NUD_Port.TabIndex = 6;
-            NUD_Port.Value = new decimal(new int[] { 6000, 0, 0, 0 });
-            // 
-            // B_New
-            // 
-            B_New.FlatAppearance.BorderSize = 0;
-            B_New.FlatStyle = FlatStyle.Flat;
-            B_New.Location = new Point(3, 7);
-            B_New.Name = "B_New";
-            B_New.Size = new Size(63, 23);
-            B_New.TabIndex = 0;
-            B_New.Text = "Add";
-            B_New.Click += B_New_Click;
-            // 
-            // Tab_Hub
-            // 
-            Tab_Hub.Controls.Add(PG_Hub);
-            Tab_Hub.Location = new Point(4, 49);
-            Tab_Hub.Name = "Tab_Hub";
-            Tab_Hub.Padding = new Padding(3);
-            Tab_Hub.Size = new Size(726, 466);
-            Tab_Hub.TabIndex = 2;
-            Tab_Hub.Text = "Hub";
-            // 
-            // PG_Hub
-            // 
-            PG_Hub.Dock = DockStyle.Fill;
-            PG_Hub.Location = new Point(3, 3);
-            PG_Hub.Name = "PG_Hub";
-            PG_Hub.PropertySort = PropertySort.Categorized;
-            PG_Hub.Size = new Size(720, 460);
-            PG_Hub.TabIndex = 0;
-            PG_Hub.ToolbarVisible = false;
-            // 
-            // Tab_Logs
-            // 
-            Tab_Logs.Controls.Add(RTB_Logs);
-            Tab_Logs.Location = new Point(4, 49);
-            Tab_Logs.Name = "Tab_Logs";
-            Tab_Logs.Size = new Size(726, 466);
-            Tab_Logs.TabIndex = 1;
-            Tab_Logs.Text = "Logs";
-            // 
-            // RTB_Logs
-            // 
-            RTB_Logs.Dock = DockStyle.Fill;
-            RTB_Logs.Location = new Point(0, 0);
-            RTB_Logs.Name = "RTB_Logs";
-            RTB_Logs.ReadOnly = true;
-            RTB_Logs.Size = new Size(726, 466);
-            RTB_Logs.TabIndex = 0;
-            RTB_Logs.Text = "";
-            // 
-            // B_Stop
-            // 
-            B_Stop.BackColor = Color.Maroon;
-            B_Stop.BackgroundImageLayout = ImageLayout.None;
-            B_Stop.FlatStyle = FlatStyle.Popup;
-            B_Stop.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            B_Stop.ForeColor = Color.WhiteSmoke;
-            B_Stop.Image = Resources.stopall;
-            B_Stop.ImageAlign = ContentAlignment.MiddleLeft;
-            B_Stop.Location = new Point(99, 9);
-            B_Stop.Margin = new Padding(0);
-            B_Stop.Name = "B_Stop";
-            B_Stop.Size = new Size(90, 28);
-            B_Stop.TabIndex = 1;
-            B_Stop.Text = "Stop Bots";
-            B_Stop.TextAlign = ContentAlignment.MiddleRight;
-            B_Stop.UseVisualStyleBackColor = false;
-            B_Stop.Click += B_Stop_Click;
-            // 
-            // B_Start
-            // 
-            B_Start.BackColor = Color.FromArgb(192, 255, 192);
-            B_Start.FlatStyle = FlatStyle.Popup;
-            B_Start.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            B_Start.ForeColor = Color.ForestGreen;
-            B_Start.Image = Resources.startall;
-            B_Start.ImageAlign = ContentAlignment.MiddleLeft;
-            B_Start.Location = new Point(2, 9);
-            B_Start.Margin = new Padding(0);
-            B_Start.Name = "B_Start";
-            B_Start.Size = new Size(91, 28);
-            B_Start.TabIndex = 0;
-            B_Start.Text = "Start Bots";
-            B_Start.TextAlign = ContentAlignment.MiddleRight;
-            B_Start.UseVisualStyleBackColor = false;
-            B_Start.Click += B_Start_Click;
-            // 
-            // B_RebootAndStop
-            // 
-            B_RebootAndStop.BackColor = Color.PowderBlue;
-            B_RebootAndStop.FlatStyle = FlatStyle.Popup;
-            B_RebootAndStop.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            B_RebootAndStop.ForeColor = Color.SteelBlue;
-            B_RebootAndStop.Image = Resources.refresh;
-            B_RebootAndStop.ImageAlign = ContentAlignment.MiddleLeft;
-            B_RebootAndStop.Location = new Point(301, 9);
-            B_RebootAndStop.Margin = new Padding(0);
-            B_RebootAndStop.Name = "B_RebootAndStop";
-            B_RebootAndStop.Size = new Size(88, 28);
-            B_RebootAndStop.TabIndex = 2;
-            B_RebootAndStop.Text = "Reset Bot";
-            B_RebootAndStop.TextAlign = ContentAlignment.MiddleRight;
-            B_RebootAndStop.UseVisualStyleBackColor = false;
-            B_RebootAndStop.Click += B_RebootAndStop_Click;
-            // 
-            // updater
-            // 
-            updater.BackColor = Color.Gray;
-            updater.FlatStyle = FlatStyle.Popup;
-            updater.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            updater.ForeColor = Color.Transparent;
-            updater.Image = Resources.update;
-            updater.ImageAlign = ContentAlignment.MiddleLeft;
-            updater.Location = new Point(394, 9);
-            updater.Margin = new Padding(0);
-            updater.Name = "updater";
-            updater.Size = new Size(78, 28);
-            updater.TabIndex = 3;
-            updater.Text = "Update";
-            updater.TextAlign = ContentAlignment.MiddleRight;
-            updater.UseVisualStyleBackColor = false;
-            updater.Click += Updater_Click;
-            // 
-            // ButtonPanel
-            // 
-            ButtonPanel.BackColor = SystemColors.Control;
-            ButtonPanel.Controls.Add(B_RefreshMap);
-            ButtonPanel.Controls.Add(updater);
-            ButtonPanel.Controls.Add(B_RebootAndStop);
-            ButtonPanel.Controls.Add(B_Stop);
-            ButtonPanel.Controls.Add(B_Start);
-            ButtonPanel.Location = new Point(249, 0);
-            ButtonPanel.Margin = new Padding(3, 4, 3, 4);
-            ButtonPanel.Name = "ButtonPanel";
-            ButtonPanel.Size = new Size(481, 42);
-            ButtonPanel.TabIndex = 0;
-            // 
-            // B_RefreshMap
-            // 
-            B_RefreshMap.BackColor = Color.LightGray;
-            B_RefreshMap.BackgroundImageLayout = ImageLayout.None;
-            B_RefreshMap.FlatStyle = FlatStyle.Popup;
-            B_RefreshMap.Font = new Font("Segoe UI", 9F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            B_RefreshMap.ForeColor = Color.Green;
-            B_RefreshMap.Image = Resources.maprefresh;
-            B_RefreshMap.ImageAlign = ContentAlignment.MiddleLeft;
-            B_RefreshMap.Location = new Point(194, 9);
-            B_RefreshMap.Margin = new Padding(0);
-            B_RefreshMap.Name = "B_RefreshMap";
-            B_RefreshMap.Size = new Size(103, 28);
-            B_RefreshMap.TabIndex = 4;
-            B_RefreshMap.Text = "Refresh Map";
-            B_RefreshMap.TextAlign = ContentAlignment.MiddleRight;
-            B_RefreshMap.UseVisualStyleBackColor = false;
-            B_RefreshMap.Click += RefreshMap_Click;
-            // 
-            // Main
-            // 
+
+            // Form
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(734, 519);
-            Controls.Add(ButtonPanel);
-            Controls.Add(TC_Main);
+            ClientSize = new Size(1280, 720);
+            MinimumSize = new Size(1100, 600);
+            BackColor = Color.FromArgb(23, 26, 33); 
+            Font = new Font("Segoe UI", 9F, FontStyle.Regular);
             Icon = Resources.icon;
-            MaximizeBox = false;
             Name = "Main";
             StartPosition = FormStartPosition.CenterScreen;
-            Text = "NOT RaidBot";
+            Text = "RaidBot Control Center";
             FormClosing += Main_FormClosing;
-            TC_Main.ResumeLayout(false);
-            Tab_Bots.ResumeLayout(false);
-            Tab_Bots.PerformLayout();
+            DoubleBuffered = true;
+
+            // Particle Background Panel
+            particlePanel.Dock = DockStyle.Fill;
+            particlePanel.BackColor = Color.Transparent;
+            particlePanel.SendToBack();
+            particlePanel.Paint += ParticlePanel_Paint;
+            Controls.Add(particlePanel);
+
+            // Main Layout Panel
+            mainLayoutPanel.ColumnCount = 2;
+            mainLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 260F));
+            mainLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            mainLayoutPanel.Controls.Add(sidebarPanel, 0, 0);
+            mainLayoutPanel.Controls.Add(contentPanel, 1, 0);
+            mainLayoutPanel.Dock = DockStyle.Fill;
+            mainLayoutPanel.Location = new Point(0, 0);
+            mainLayoutPanel.Margin = new Padding(0);
+            mainLayoutPanel.Name = "mainLayoutPanel";
+            mainLayoutPanel.RowCount = 1;
+            mainLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            mainLayoutPanel.TabIndex = 0;
+            mainLayoutPanel.BackColor = Color.Transparent;
+
+            // Sidebar Panel
+            sidebarPanel.BackColor = Color.FromArgb(18, 18, 18); 
+            sidebarPanel.Controls.Add(navButtonsPanel);
+            sidebarPanel.Controls.Add(sidebarBottomPanel);
+            sidebarPanel.Controls.Add(logoPanel);
+            sidebarPanel.Dock = DockStyle.Fill;
+            sidebarPanel.Location = new Point(0, 0);
+            sidebarPanel.Margin = new Padding(0);
+            sidebarPanel.Name = "sidebarPanel";
+            sidebarPanel.Size = new Size(260, 720);
+            sidebarPanel.TabIndex = 0;
+
+            // Logo Panel
+            logoPanel.BackColor = Color.FromArgb(15, 15, 15);
+            logoPanel.Dock = DockStyle.Top;
+            logoPanel.Height = 100;
+            logoPanel.Location = new Point(0, 0);
+            logoPanel.Name = "logoPanel";
+            logoPanel.Size = new Size(260, 100);
+            logoPanel.TabIndex = 2;
+            logoPanel.Paint += LogoPanel_Paint;
+
+            // Navigation Buttons Panel
+            navButtonsPanel.AutoSize = false;
+            navButtonsPanel.Controls.Add(btnNavBots);
+            navButtonsPanel.Controls.Add(btnNavHub);
+            navButtonsPanel.Controls.Add(btnNavLogs);
+            navButtonsPanel.Controls.Add(btnNavExit);
+            navButtonsPanel.Dock = DockStyle.Fill;
+            navButtonsPanel.FlowDirection = FlowDirection.TopDown;
+            navButtonsPanel.Location = new Point(0, 100);
+            navButtonsPanel.Margin = new Padding(0);
+            navButtonsPanel.Name = "navButtonsPanel";
+            navButtonsPanel.Padding = new Padding(0, 40, 0, 0);
+            navButtonsPanel.Size = new Size(260, 540);
+            navButtonsPanel.TabIndex = 1;
+            navButtonsPanel.BackColor = Color.Transparent;
+
+            // Navigation Button Style
+            ConfigureNavButton(btnNavBots, "BOTS", 0, "Manage bot connections");
+            ConfigureNavButton(btnNavHub, "CONFIGURATION", 1, "System settings");
+            ConfigureNavButton(btnNavLogs, "SYSTEM LOGS", 2, "View activity logs");
+            ConfigureExitButton();
+
+            // Sidebar Bottom Panel
+            sidebarBottomPanel.Controls.Add(btnUpdate);
+            sidebarBottomPanel.Dock = DockStyle.Bottom;
+            sidebarBottomPanel.Height = 80;
+            sidebarBottomPanel.Location = new Point(0, 640);
+            sidebarBottomPanel.Name = "sidebarBottomPanel";
+            sidebarBottomPanel.Padding = new Padding(20, 10, 20, 20);
+            sidebarBottomPanel.TabIndex = 0;
+            sidebarBottomPanel.BackColor = Color.FromArgb(15, 15, 15);
+
+            // Status Indicator
+            statusIndicator.BackColor = Color.FromArgb(87, 242, 135); 
+            statusIndicator.Size = new Size(8, 8);
+            statusIndicator.Location = new Point(6, 26); 
+            statusIndicator.Name = "statusIndicator";
+            CreateCircularRegion(statusIndicator);
+            sidebarBottomPanel.Controls.Add(statusIndicator);
+
+            // Update Button
+            btnUpdate.BackColor = Color.FromArgb(30, 30, 30);
+            btnUpdate.Dock = DockStyle.Fill;
+            btnUpdate.FlatAppearance.BorderSize = 0;
+            btnUpdate.FlatAppearance.MouseOverBackColor = Color.FromArgb(40, 40, 40);
+            btnUpdate.FlatStyle = FlatStyle.Flat;
+            btnUpdate.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            btnUpdate.ForeColor = Color.FromArgb(176, 176, 176);
+            btnUpdate.Location = new Point(20, 10);
+            btnUpdate.Name = "btnUpdate";
+            btnUpdate.Size = new Size(220, 50);
+            btnUpdate.TabIndex = 0;
+            btnUpdate.Text = "CHECK FOR UPDATES";
+            btnUpdate.UseVisualStyleBackColor = false;
+            btnUpdate.Click += Updater_Click;
+            btnUpdate.Cursor = Cursors.Hand;
+            btnUpdate.Tag = new ButtonAnimationState();
+            btnUpdate.Paint += (s, e) => {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+                var animState = btnUpdate.Tag as ButtonAnimationState;
+
+                // Draw hover glow background
+                if (animState != null && animState.HoverProgress > 0)
+                {
+                    using var glowBrush = new SolidBrush(Color.FromArgb((int)(20 * animState.HoverProgress), 88, 101, 242));
+                    e.Graphics.FillRectangle(glowBrush, btnUpdate.ClientRectangle);
+                }
+
+                // Determine icon color with hover effect
+                var iconColor = btnUpdate.ForeColor;
+                if (animState != null && animState.HoverProgress > 0)
+                {
+                    iconColor = Color.FromArgb(
+                        (int)(176 + (224 - 176) * animState.HoverProgress),
+                        (int)(176 + (224 - 176) * animState.HoverProgress),
+                        (int)(176 + (224 - 176) * animState.HoverProgress)
+                    );
+                }
+
+                // Draw icon
+                using var iconFont = new Font("Segoe MDL2 Assets", 14F);
+                var iconText = "\uE895"; // Download/Update icon
+
+                using var iconBrush = new SolidBrush(iconColor);
+                var iconSize = e.Graphics.MeasureString(iconText, iconFont);
+
+                // Position icon on the left
+                var iconX = 20;
+                var iconY = (btnUpdate.Height - iconSize.Height) / 2;
+                e.Graphics.DrawString(iconText, iconFont, iconBrush, iconX, iconY);
+
+                // Draw text after icon
+                using var textFont = new Font("Segoe UI", 9F, FontStyle.Regular);
+                var text = "CHECK FOR UPDATES";
+                var textSize = e.Graphics.MeasureString(text, textFont);
+                var textX = iconX + iconSize.Width + 10;
+                var textY = (btnUpdate.Height - textSize.Height) / 2;
+                e.Graphics.DrawString(text, textFont, iconBrush, textX, textY);
+            };
+            btnUpdate.Text = ""; // Clear text since we're drawing it manually
+            ConfigureHoverAnimation(btnUpdate);
+
+            // Content Panel
+            contentPanel.BackColor = Color.FromArgb(28, 28, 28); 
+            contentPanel.Controls.Add(botsPanel);
+            contentPanel.Controls.Add(hubPanel);
+            contentPanel.Controls.Add(logsPanel);
+            contentPanel.Controls.Add(headerPanel);
+            contentPanel.Dock = DockStyle.Fill;
+            contentPanel.Location = new Point(260, 0);
+            contentPanel.Margin = new Padding(0);
+            contentPanel.Name = "contentPanel";
+            contentPanel.Size = new Size(1020, 720);
+            contentPanel.TabIndex = 1;
+
+            // Header Panel
+            headerPanel.BackColor = Color.FromArgb(28, 28, 28);
+            headerPanel.Controls.Add(controlButtonsPanel);
+            headerPanel.Controls.Add(titleLabel);
+            headerPanel.Dock = DockStyle.Top;
+            headerPanel.Height = 100;
+            headerPanel.Location = new Point(0, 0);
+            headerPanel.Name = "headerPanel";
+            headerPanel.Size = new Size(1020, 100);
+            headerPanel.TabIndex = 3;
+            headerPanel.Paint += HeaderPanel_Paint;
+
+            // Title Label
+            titleLabel.AutoSize = true;
+            titleLabel.Font = new Font("Segoe UI", 24F, FontStyle.Bold);
+            titleLabel.ForeColor = Color.FromArgb(224, 224, 224); 
+            titleLabel.Location = new Point(40, 25);
+            titleLabel.Name = "titleLabel";
+            titleLabel.Size = new Size(250, 45);
+            titleLabel.TabIndex = 0;
+            titleLabel.Text = "Bot Management";
+
+            // Control Buttons Panel
+            controlButtonsPanel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            controlButtonsPanel.AutoSize = true;
+            controlButtonsPanel.Controls.Add(btnStart);
+            controlButtonsPanel.Controls.Add(btnStop);
+            controlButtonsPanel.Controls.Add(btnReboot);
+            controlButtonsPanel.Controls.Add(btnRefreshMap);
+            controlButtonsPanel.FlowDirection = FlowDirection.LeftToRight;
+            controlButtonsPanel.Location = new Point(480, 30);
+            controlButtonsPanel.Name = "controlButtonsPanel";
+            controlButtonsPanel.Size = new Size(500, 40);
+            controlButtonsPanel.TabIndex = 1;
+            controlButtonsPanel.BackColor = Color.Transparent;
+
+            // Control Buttons
+            ConfigureControlButton(btnStart, "START ALL", Color.FromArgb(87, 242, 135)); // #57f287
+            ConfigureControlButton(btnStop, "STOP ALL", Color.FromArgb(237, 66, 69)); // #ed4245
+            ConfigureControlButton(btnReboot, "REBOOT", Color.FromArgb(88, 101, 242)); // #5865f2
+            ConfigureControlButton(btnRefreshMap, "REFRESH MAP", Color.FromArgb(254, 231, 92)); // #fee75c
+
+            btnStart.Click += B_Start_Click;
+            btnStop.Click += B_Stop_Click;
+            btnReboot.Click += B_RebootAndStop_Click;
+            btnRefreshMap.Click += RefreshMap_Click;
+
+            // Bots Panel
+            botsPanel.BackColor = Color.Transparent;
+            botsPanel.Controls.Add(FLP_Bots);
+            botsPanel.Controls.Add(botHeaderPanel);
+            botsPanel.Dock = DockStyle.Fill;
+            botsPanel.Location = new Point(0, 100);
+            botsPanel.Name = "botsPanel";
+            botsPanel.Padding = new Padding(40);
+            botsPanel.Size = new Size(1020, 620);
+            botsPanel.TabIndex = 0;
+            botsPanel.Visible = true;
+
+            // Bot Header Panel
+            botHeaderPanel.BackColor = Color.FromArgb(35, 35, 35);
+            botHeaderPanel.Controls.Add(addBotPanel);
+            botHeaderPanel.Dock = DockStyle.Top;
+            botHeaderPanel.Height = 100;
+            botHeaderPanel.Location = new Point(40, 40);
+            botHeaderPanel.Name = "botHeaderPanel";
+            botHeaderPanel.Size = new Size(940, 100);
+            botHeaderPanel.TabIndex = 1;
+            CreateRoundedPanel(botHeaderPanel);
+
+            // Add Bot Panel
+            addBotPanel.Controls.Add(B_New);
+            addBotPanel.Controls.Add(CB_Routine);
+            addBotPanel.Controls.Add(CB_Protocol);
+            addBotPanel.Controls.Add(NUD_Port);
+            addBotPanel.Controls.Add(TB_IP);
+            addBotPanel.Dock = DockStyle.Fill;
+            addBotPanel.Location = new Point(0, 0);
+            addBotPanel.Name = "addBotPanel";
+            addBotPanel.Size = new Size(940, 100);
+            addBotPanel.TabIndex = 0;
+            addBotPanel.BackColor = Color.Transparent;
+
+            // Bot Configuration Controls
+            TB_IP.BackColor = Color.FromArgb(28, 28, 28);
+            TB_IP.BorderStyle = BorderStyle.FixedSingle;
+            TB_IP.Font = new Font("Segoe UI", 11F);
+            TB_IP.ForeColor = Color.FromArgb(224, 224, 224);
+            TB_IP.Location = new Point(30, 35);
+            TB_IP.Name = "TB_IP";
+            TB_IP.PlaceholderText = "IP Address";
+            TB_IP.Size = new Size(150, 25);
+            TB_IP.TabIndex = 0;
+            TB_IP.Text = "192.168.0.1";
+
+            ConfigureNumericUpDown(NUD_Port, 190, 35, 80);
+            NUD_Port.Maximum = new decimal(new int[] { 65535, 0, 0, 0 });
+            NUD_Port.Value = new decimal(new int[] { 6000, 0, 0, 0 });
+
+            ConfigureComboBox(CB_Protocol, 280, 35, 120);
+            CB_Protocol.SelectedIndexChanged += CB_Protocol_SelectedIndexChanged;
+
+            ConfigureComboBox(CB_Routine, 410, 35, 200);
+
+            // Add Bot Button with glow effect
+            B_New.BackColor = Color.FromArgb(87, 242, 135);
+            B_New.FlatAppearance.BorderSize = 0;
+            B_New.FlatStyle = FlatStyle.Flat;
+            B_New.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
+            B_New.ForeColor = Color.FromArgb(28, 28, 28);
+            B_New.Location = new Point(620, 30);
+            B_New.Name = "B_New";
+            B_New.Size = new Size(120, 40);
+            B_New.TabIndex = 4;
+            B_New.Text = "ADD BOT";
+            B_New.UseVisualStyleBackColor = false;
+            B_New.Click += B_New_Click;
+            B_New.Cursor = Cursors.Hand;
+            ConfigureGlowButton(B_New);
+
+            // Bot List Panel
+            FLP_Bots.AutoScroll = true;
+            FLP_Bots.BackColor = Color.Transparent;
+            FLP_Bots.Dock = DockStyle.Fill;
+            FLP_Bots.FlowDirection = FlowDirection.TopDown;
+            FLP_Bots.Location = new Point(40, 140);
+            FLP_Bots.Margin = new Padding(0, 20, 0, 0);
+            FLP_Bots.Name = "FLP_Bots";
+            FLP_Bots.Padding = new Padding(0);
+            FLP_Bots.Size = new Size(940, 440);
+            FLP_Bots.TabIndex = 0;
+            FLP_Bots.WrapContents = false;
+            FLP_Bots.Resize += FLP_Bots_Resize;
+
+            // Hub Panel
+            hubPanel.BackColor = Color.Transparent;
+            hubPanel.Controls.Add(PG_Hub);
+            hubPanel.Dock = DockStyle.Fill;
+            hubPanel.Location = new Point(0, 100);
+            hubPanel.Name = "hubPanel";
+            hubPanel.Padding = new Padding(40);
+            hubPanel.Size = new Size(1020, 620);
+            hubPanel.TabIndex = 1;
+            hubPanel.Visible = false;
+
+            // Property Grid Container
+            var pgContainer = new Panel();
+            pgContainer.BackColor = Color.FromArgb(35, 35, 35);
+            pgContainer.Dock = DockStyle.Fill;
+            pgContainer.Location = new Point(40, 40);
+            pgContainer.Name = "pgContainer";
+            pgContainer.Padding = new Padding(2);
+            pgContainer.Size = new Size(940, 540);
+            CreateRoundedPanel(pgContainer);
+            hubPanel.Controls.Add(pgContainer);
+
+            // Property Grid
+            PG_Hub.BackColor = Color.FromArgb(35, 35, 35);
+            PG_Hub.CategoryForeColor = Color.FromArgb(224, 224, 224);
+            PG_Hub.CategorySplitterColor = Color.FromArgb(50, 50, 50);
+            PG_Hub.CommandsBackColor = Color.FromArgb(35, 35, 35);
+            PG_Hub.CommandsForeColor = Color.FromArgb(224, 224, 224);
+            PG_Hub.Dock = DockStyle.Fill;
+            PG_Hub.Font = new Font("Segoe UI", 9F);
+            PG_Hub.HelpBackColor = Color.FromArgb(35, 35, 35);
+            PG_Hub.HelpForeColor = Color.FromArgb(176, 176, 176);
+            PG_Hub.LineColor = Color.FromArgb(50, 50, 50);
+            PG_Hub.Location = new Point(2, 2);
+            PG_Hub.Name = "PG_Hub";
+            PG_Hub.PropertySort = PropertySort.Categorized;
+            PG_Hub.Size = new Size(936, 536);
+            PG_Hub.TabIndex = 0;
+            PG_Hub.ToolbarVisible = false;
+            PG_Hub.ViewBackColor = Color.FromArgb(28, 28, 28);
+            PG_Hub.ViewForeColor = Color.FromArgb(224, 224, 224);
+            pgContainer.Controls.Add(PG_Hub);
+
+            // Logs Panel
+            logsPanel.BackColor = Color.Transparent;
+            logsPanel.Controls.Add(RTB_Logs);
+            logsPanel.Controls.Add(logsHeaderPanel);
+            logsPanel.Dock = DockStyle.Fill;
+            logsPanel.Location = new Point(0, 100);
+            logsPanel.Name = "logsPanel";
+            logsPanel.Padding = new Padding(40);
+            logsPanel.Size = new Size(1020, 620);
+            logsPanel.TabIndex = 2;
+            logsPanel.Visible = false;
+
+            // Logs Container
+            var logsContainer = new Panel();
+            logsContainer.BackColor = Color.FromArgb(35, 35, 35);
+            logsContainer.Dock = DockStyle.Fill;
+            logsContainer.Location = new Point(40, 110);
+            logsContainer.Margin = new Padding(0, 20, 0, 0);
+            logsContainer.Name = "logsContainer";
+            logsContainer.Padding = new Padding(2);
+            logsContainer.Size = new Size(940, 470);
+            CreateRoundedPanel(logsContainer);
+            logsPanel.Controls.Add(logsContainer);
+
+            // Logs Header Panel
+            logsHeaderPanel.BackColor = Color.FromArgb(35, 35, 35);
+            logsHeaderPanel.Controls.Add(btnClearLogs);
+            logsHeaderPanel.Controls.Add(logSearchBox);
+            logsHeaderPanel.Dock = DockStyle.Top;
+            logsHeaderPanel.Height = 60;
+            logsHeaderPanel.Location = new Point(40, 40);
+            logsHeaderPanel.Name = "logsHeaderPanel";
+            logsHeaderPanel.Padding = new Padding(20, 15, 20, 15);
+            logsHeaderPanel.Size = new Size(940, 60);
+            logsHeaderPanel.TabIndex = 1;
+            CreateRoundedPanel(logsHeaderPanel);
+
+            // Log Search Box
+            logSearchBox.BackColor = Color.FromArgb(28, 28, 28);
+            logSearchBox.BorderStyle = BorderStyle.FixedSingle;
+            logSearchBox.Dock = DockStyle.Fill;
+            logSearchBox.Font = new Font("Segoe UI", 10F);
+            logSearchBox.ForeColor = Color.FromArgb(224, 224, 224);
+            logSearchBox.Location = new Point(20, 15);
+            logSearchBox.Name = "logSearchBox";
+            logSearchBox.PlaceholderText = "Search logs...";
+            logSearchBox.Size = new Size(700, 30);
+            logSearchBox.TabIndex = 0;
+            logSearchBox.TextChanged += (s, e) => {
+                // Future search implementation
+            };
+
+            // Clear Logs Button
+            btnClearLogs.BackColor = Color.FromArgb(237, 66, 69);
+            btnClearLogs.Dock = DockStyle.Right;
+            btnClearLogs.FlatAppearance.BorderSize = 0;
+            btnClearLogs.FlatStyle = FlatStyle.Flat;
+            btnClearLogs.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btnClearLogs.ForeColor = Color.White;
+            btnClearLogs.Location = new Point(800, 15);
+            btnClearLogs.Name = "btnClearLogs";
+            btnClearLogs.Size = new Size(120, 30);
+            btnClearLogs.TabIndex = 1;
+            btnClearLogs.Text = "CLEAR LOGS";
+            btnClearLogs.UseVisualStyleBackColor = false;
+            btnClearLogs.Cursor = Cursors.Hand;
+            btnClearLogs.Click += (s, e) => RTB_Logs.Clear();
+            ConfigureGlowButton(btnClearLogs);
+
+            // Rich Text Box
+            RTB_Logs.BackColor = Color.FromArgb(28, 28, 28);
+            RTB_Logs.BorderStyle = BorderStyle.None;
+            RTB_Logs.Dock = DockStyle.Fill;
+            RTB_Logs.Font = new Font("Consolas", 10F);
+            RTB_Logs.ForeColor = Color.FromArgb(224, 224, 224);
+            RTB_Logs.Location = new Point(2, 2);
+            RTB_Logs.Name = "RTB_Logs";
+            RTB_Logs.ReadOnly = true;
+            RTB_Logs.Size = new Size(936, 466);
+            RTB_Logs.TabIndex = 0;
+            RTB_Logs.Text = "";
+            RTB_Logs.TextChanged += RTB_Logs_TextChanged;
+            logsContainer.Controls.Add(RTB_Logs);
+
+            Controls.Add(mainLayoutPanel);
+            Controls.Add(particlePanel);
+
+            // Configure Tray Icon
+            ConfigureTrayIcon();
+
+            mainLayoutPanel.ResumeLayout(false);
+            sidebarPanel.ResumeLayout(false);
+            navButtonsPanel.ResumeLayout(false);
+            sidebarBottomPanel.ResumeLayout(false);
+            headerPanel.ResumeLayout(false);
+            headerPanel.PerformLayout();
+            controlButtonsPanel.ResumeLayout(false);
+            contentPanel.ResumeLayout(false);
+            botsPanel.ResumeLayout(false);
+            botHeaderPanel.ResumeLayout(false);
+            addBotPanel.ResumeLayout(false);
+            addBotPanel.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)NUD_Port).EndInit();
-            Tab_Hub.ResumeLayout(false);
-            Tab_Logs.ResumeLayout(false);
-            ButtonPanel.ResumeLayout(false);
+            hubPanel.ResumeLayout(false);
+            logsPanel.ResumeLayout(false);
+            logsHeaderPanel.ResumeLayout(false);
+            logsHeaderPanel.PerformLayout();
             ResumeLayout(false);
+
+            // Start animation timer
+            animationTimer.Start();
+        }
+
+        private void ConfigureExitButton()
+        {
+            btnNavExit.BackColor = Color.FromArgb(18, 18, 18);
+            btnNavExit.Cursor = Cursors.Hand;
+            btnNavExit.FlatAppearance.BorderSize = 0;
+            btnNavExit.FlatAppearance.MouseOverBackColor = Color.FromArgb(30, 30, 30);
+            btnNavExit.FlatStyle = FlatStyle.Flat;
+            btnNavExit.Font = new Font("Segoe UI", 11F, FontStyle.Regular);
+            btnNavExit.ForeColor = Color.FromArgb(237, 66, 69); // Red color for exit
+            btnNavExit.Location = new Point(0, 220);
+            btnNavExit.Margin = new Padding(0, 40, 0, 0); // Extra margin to separate from other buttons
+            btnNavExit.Name = "btnNavExit";
+            btnNavExit.Padding = new Padding(60, 0, 0, 0);
+            btnNavExit.Size = new Size(260, 50);
+            btnNavExit.TabIndex = 3;
+            btnNavExit.Text = "EXIT";
+            btnNavExit.TextAlign = ContentAlignment.MiddleLeft;
+            btnNavExit.UseVisualStyleBackColor = false;
+            btnNavExit.Tag = new ButtonAnimationState();
+
+            btnNavExit.Paint += (s, e) => {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+                var animState = btnNavExit.Tag as ButtonAnimationState;
+
+                // Draw hover background
+                if (animState != null && animState.HoverProgress > 0)
+                {
+                    using var brush = new SolidBrush(Color.FromArgb((int)(30 * animState.HoverProgress), 237, 66, 69));
+                    e.Graphics.FillRectangle(brush, btnNavExit.ClientRectangle);
+                }
+
+                // Draw icon
+                var iconRect = new Rectangle(20, (btnNavExit.Height - 24) / 2, 24, 24);
+
+                // Apply glow effect on hover
+                if (animState != null && animState.HoverProgress > 0)
+                {
+                    var glowSize = 2 + (int)(8 * animState.HoverProgress);
+                    using var glowBrush = new SolidBrush(Color.FromArgb((int)(30 * animState.HoverProgress), 237, 66, 69));
+                    e.Graphics.FillEllipse(glowBrush, iconRect.X - glowSize / 2, iconRect.Y - glowSize / 2,
+                        iconRect.Width + glowSize, iconRect.Height + glowSize);
+                }
+
+                // Draw exit icon
+                using var iconFont = new Font("Segoe MDL2 Assets", 16F);
+                var iconText = "\uE8BB"; // Power/Exit icon
+
+                using var iconBrush = new SolidBrush(btnNavExit.ForeColor);
+                var textSize = e.Graphics.MeasureString(iconText, iconFont);
+                var textX = iconRect.X + (iconRect.Width - textSize.Width) / 2;
+                var textY = iconRect.Y + (iconRect.Height - textSize.Height) / 2;
+
+                e.Graphics.DrawString(iconText, iconFont, iconBrush, textX, textY);
+            };
+
+            btnNavExit.Click += (s, e) => ExitApplication();
+            ConfigureHoverAnimation(btnNavExit);
+        }
+
+        private void ConfigureTrayIcon()
+        {
+            // Configure tray icon
+            trayIcon.Icon = Icon;
+            trayIcon.Text = Text;
+            trayIcon.Visible = false;
+            trayIcon.DoubleClick += (s, e) => ShowFromTray();
+
+            // Configure tray context menu
+            trayContextMenu.BackColor = Color.FromArgb(35, 35, 35);
+            trayContextMenu.Font = new Font("Segoe UI", 10F);
+            trayContextMenu.Renderer = new MainMenuRenderer();
+
+            // Add menu items
+            var showMenuItem = new ToolStripMenuItem("Show Window")
+            {
+                ForeColor = Color.FromArgb(224, 224, 224)
+            };
+            showMenuItem.Click += (s, e) => ShowFromTray();
+
+            var startMenuItem = new ToolStripMenuItem("Start All Bots")
+            {
+                ForeColor = Color.FromArgb(87, 242, 135)
+            };
+            startMenuItem.Click += (s, e) => B_Start_Click(s, e);
+
+            var stopMenuItem = new ToolStripMenuItem("Stop All Bots")
+            {
+                ForeColor = Color.FromArgb(237, 66, 69)
+            };
+            stopMenuItem.Click += (s, e) => B_Stop_Click(s, e);
+
+            var exitMenuItem = new ToolStripMenuItem("Exit")
+            {
+                ForeColor = Color.FromArgb(237, 66, 69)
+            };
+            exitMenuItem.Click += (s, e) => ExitApplication();
+
+            trayContextMenu.Items.AddRange(new ToolStripItem[] {
+                showMenuItem,
+                new ToolStripSeparator(),
+                startMenuItem,
+                stopMenuItem,
+                new ToolStripSeparator(),
+                exitMenuItem
+            });
+
+            trayIcon.ContextMenuStrip = trayContextMenu;
+        }
+
+        // Custom menu renderer for dark theme
+        private class MainMenuRenderer : ToolStripProfessionalRenderer
+        {
+            public MainMenuRenderer() : base(new MainColorTable()) { }
+
+            protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+            {
+                var rc = new Rectangle(Point.Empty, e.Item.Size);
+                var c = e.Item.Selected ? Color.FromArgb(50, 50, 50) : Color.FromArgb(35, 35, 35);
+                using (var brush = new SolidBrush(c))
+                    e.Graphics.FillRectangle(brush, rc);
+            }
+
+            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+            {
+                if (!e.Item.Enabled)
+                    e.TextColor = Color.FromArgb(100, 100, 100);
+                base.OnRenderItemText(e);
+            }
+        }
+
+        private class MainColorTable : ProfessionalColorTable
+        {
+            public override Color MenuItemSelected => Color.FromArgb(50, 50, 50);
+            public override Color MenuItemBorder => Color.FromArgb(88, 101, 242);
+            public override Color MenuBorder => Color.FromArgb(50, 50, 50);
+            public override Color ToolStripDropDownBackground => Color.FromArgb(35, 35, 35);
+            public override Color ImageMarginGradientBegin => Color.FromArgb(35, 35, 35);
+            public override Color ImageMarginGradientMiddle => Color.FromArgb(35, 35, 35);
+            public override Color ImageMarginGradientEnd => Color.FromArgb(35, 35, 35);
+            public override Color SeparatorDark => Color.FromArgb(50, 50, 50);
+            public override Color SeparatorLight => Color.FromArgb(60, 60, 60);
+        }
+
+        private void ConfigureNavButton(Button btn, string text, int index, string tooltip)
+        {
+            btn.BackColor = Color.FromArgb(18, 18, 18);
+            btn.Cursor = Cursors.Hand;
+            btn.FlatAppearance.BorderSize = 0;
+            btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(30, 30, 30);
+            btn.FlatStyle = FlatStyle.Flat;
+            btn.Font = new Font("Segoe UI", 11F, FontStyle.Regular);
+            btn.ForeColor = Color.FromArgb(176, 176, 176); // #B0B0B0
+            btn.Location = new Point(0, 40 + (index * 60));
+            btn.Margin = new Padding(0, 0, 0, 10);
+            btn.Name = $"btnNav{text.Replace(" ", "")}";
+            btn.Padding = new Padding(60, 0, 0, 0);
+            btn.Size = new Size(260, 50);
+            btn.TabIndex = index;
+            btn.Text = text;
+            btn.TextAlign = ContentAlignment.MiddleLeft;
+            btn.UseVisualStyleBackColor = false;
+            btn.Tag = new ButtonAnimationState();
+
+            // Add icon space
+            btn.Paint += (s, e) => {
+                var animState = btn.Tag as ButtonAnimationState;
+
+                // Draw selection indicator
+                if (btn.BackColor == Color.FromArgb(30, 30, 30))
+                {
+                    using var brush = new LinearGradientBrush(
+                        new RectangleF(0, 0, 4, btn.Height),
+                        Color.FromArgb(87, 242, 135),
+                        Color.FromArgb(88, 101, 242),
+                        LinearGradientMode.Vertical);
+                    e.Graphics.FillRectangle(brush, 0, 0, 4, btn.Height);
+                }
+
+                // Draw icon with glow on hover
+                var iconRect = new Rectangle(20, (btn.Height - 24) / 2, 24, 24);
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+                // Apply glow effect on hover
+                if (animState != null && animState.HoverProgress > 0)
+                {
+                    var glowSize = 2 + (int)(8 * animState.HoverProgress);
+                    using var glowBrush = new SolidBrush(Color.FromArgb((int)(30 * animState.HoverProgress), 87, 242, 135));
+                    e.Graphics.FillEllipse(glowBrush, iconRect.X - glowSize / 2, iconRect.Y - glowSize / 2,
+                        iconRect.Width + glowSize, iconRect.Height + glowSize);
+                }
+
+                // Draw font icon
+                using var iconFont = new Font("Segoe MDL2 Assets", 16F);
+                string iconText = index switch
+                {
+                    0 => "\uE77B", // Robot icon for Bots
+                    1 => "\uE713", // Settings icon for Configuration
+                    2 => "\uE7C3", // Document icon for Logs
+                    _ => "\uE700"  // Default icon
+                };
+
+                // Adjust color based on selection state
+                using var iconBrush = new SolidBrush(
+                    btn.BackColor == Color.FromArgb(30, 30, 30)
+                        ? Color.FromArgb(224, 224, 224)  // Selected - bright
+                        : Color.FromArgb(150, 150, 150)  // Unselected - dimmed
+                );
+
+                // Center the icon in the rectangle
+                var textSize = e.Graphics.MeasureString(iconText, iconFont);
+                var textX = iconRect.X + (iconRect.Width - textSize.Width) / 2;
+                var textY = iconRect.Y + (iconRect.Height - textSize.Height) / 2;
+
+                e.Graphics.DrawString(iconText, iconFont, iconBrush, textX, textY);
+            };
+
+            btn.Click += (s, e) => {
+                // Reset all nav buttons
+                foreach (Button navBtn in navButtonsPanel.Controls)
+                {
+                    navBtn.BackColor = Color.FromArgb(18, 18, 18);
+                    navBtn.ForeColor = Color.FromArgb(176, 176, 176);
+                }
+
+                // Highlight selected with animation
+                btn.BackColor = Color.FromArgb(30, 30, 30);
+                btn.ForeColor = Color.FromArgb(224, 224, 224);
+
+                // Show appropriate panel with fade transition
+                TransitionPanels(index);
+
+                // Update title with fade effect
+                titleLabel.Text = index switch
+                {
+                    0 => "Bot Management",
+                    1 => "Configuration",
+                    2 => "System Logs",
+                    _ => "RaidBot"
+                };
+            };
+
+            // Configure hover animation
+            ConfigureHoverAnimation(btn);
+
+            // Set initial selection
+            if (index == 0)
+            {
+                btn.BackColor = Color.FromArgb(30, 30, 30);
+                btn.ForeColor = Color.FromArgb(224, 224, 224);
+            }
+        }
+
+        private void ConfigureControlButton(Button btn, string text, Color baseColor)
+        {
+            btn.BackColor = baseColor;
+            btn.Cursor = Cursors.Hand;
+            btn.FlatAppearance.BorderSize = 0;
+            btn.FlatStyle = FlatStyle.Flat;
+            btn.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+            btn.ForeColor = Color.FromArgb(28, 28, 28); // Dark text on bright buttons
+            btn.Margin = new Padding(8, 0, 8, 0);
+            btn.Name = $"btn{text.Replace(" ", "")}";
+            btn.Size = new Size(110, 40);
+            btn.TabIndex = 0;
+            btn.Text = text;
+            btn.UseVisualStyleBackColor = false;
+            btn.Tag = new ButtonAnimationState { BaseColor = baseColor };
+
+            // Create rounded corners
+            CreateRoundedButton(btn);
+
+            // Configure glow effect
+            ConfigureGlowButton(btn);
+        }
+
+        private void ConfigureTextBox(TextBox tb, string placeholder, int x, int y, int width)
+        {
+            tb.BackColor = Color.FromArgb(28, 28, 28);
+            tb.BorderStyle = BorderStyle.None;
+            tb.Font = new Font("Segoe UI", 11F);
+            tb.ForeColor = Color.FromArgb(224, 224, 224);
+            tb.Location = new Point(x, y);
+            tb.Name = tb.Name;
+            tb.PlaceholderText = placeholder;
+            tb.Size = new Size(width, 25);
+            tb.TabIndex = 0;
+
+            // Focus effects with border color change
+            tb.Enter += (s, e) => {
+                if (tb.Parent != null)
+                    tb.Parent.BackColor = Color.FromArgb(88, 101, 242);
+            };
+            tb.Leave += (s, e) => {
+                if (tb.Parent != null)
+                    tb.Parent.BackColor = Color.FromArgb(50, 50, 50);
+            };
+        }
+
+        private void ConfigureNumericUpDown(NumericUpDown nud, int x, int y, int width)
+        {
+            nud.BackColor = Color.FromArgb(28, 28, 28);
+            nud.BorderStyle = BorderStyle.None;
+            nud.Font = new Font("Segoe UI", 11F);
+            nud.ForeColor = Color.FromArgb(224, 224, 224);
+            nud.Location = new Point(x, y);
+            nud.Name = nud.Name;
+            nud.Size = new Size(width, 25);
+            nud.TabIndex = 1;
+        }
+
+        private void ConfigureComboBox(ComboBox cb, int x, int y, int width)
+        {
+            cb.BackColor = Color.FromArgb(28, 28, 28);
+            cb.DropDownStyle = ComboBoxStyle.DropDownList;
+            cb.FlatStyle = FlatStyle.Flat;
+            cb.Font = new Font("Segoe UI", 11F);
+            cb.ForeColor = Color.FromArgb(224, 224, 224);
+            cb.Location = new Point(x, y);
+            cb.Name = cb.Name;
+            cb.Size = new Size(width, 28);
+            cb.TabIndex = 2;
+        }
+
+        private void ConfigureHoverAnimation(Control control)
+        {
+            var animState = control.Tag as ButtonAnimationState ?? new ButtonAnimationState();
+            control.Tag = animState;
+
+            control.MouseEnter += (s, e) => {
+                animState.IsHovering = true;
+                animState.AnimationStart = DateTime.Now;
+            };
+
+            control.MouseLeave += (s, e) => {
+                animState.IsHovering = false;
+                animState.AnimationStart = DateTime.Now;
+            };
+        }
+
+        private void ConfigureGlowButton(Button btn)
+        {
+            ConfigureHoverAnimation(btn);
+
+            btn.Paint += (s, e) => {
+                var animState = btn.Tag as ButtonAnimationState;
+                if (animState != null && animState.HoverProgress > 0)
+                {
+                    e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+                    // Multi-layer glow effect
+                    var glowAlpha = (int)(60 * animState.HoverProgress);
+                    using (var glowBrush = new SolidBrush(Color.FromArgb(glowAlpha, btn.BackColor)))
+                    {
+                        for (int i = 1; i <= 3; i++)
+                        {
+                            var rect = new Rectangle(-i * 2, -i * 2, btn.Width + i * 4, btn.Height + i * 4);
+                            e.Graphics.FillRectangle(glowBrush, rect);
+                        }
+                    }
+                }
+            };
+        }
+
+        private void CreateRoundedPanel(Panel panel)
+        {
+            panel.Paint += (s, e) => {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                using var path = new GraphicsPath();
+                var rect = panel.ClientRectangle;
+                rect.Inflate(-1, -1);
+                GraphicsExtensions.AddRoundedRectangle(path, rect, 8);
+                panel.Region = new Region(path);
+            };
+        }
+
+        private void CreateRoundedButton(Button btn)
+        {
+            using var path = new GraphicsPath();
+            GraphicsExtensions.AddRoundedRectangle(path, btn.ClientRectangle, 6);
+            btn.Region = new Region(path);
+        }
+
+        private void CreateCircularRegion(Control control)
+        {
+            using var path = new GraphicsPath();
+            path.AddEllipse(0, 0, control.Width, control.Height);
+            control.Region = new Region(path);
+        }
+
+        private void LogoPanel_Paint(object sender, PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+            // Draw gradient background
+            using var brush = new LinearGradientBrush(
+                logoPanel.ClientRectangle,
+                Color.FromArgb(88, 101, 242),
+                Color.FromArgb(87, 242, 135),
+                LinearGradientMode.ForwardDiagonal);
+
+            e.Graphics.FillRectangle(brush, logoPanel.ClientRectangle);
+
+            // Draw text with glow
+            using var font = new Font("Segoe UI", 22F, FontStyle.Bold);
+            var text = "S/V RAIDBOT";
+            var textSize = e.Graphics.MeasureString(text, font);
+            var x = (logoPanel.Width - textSize.Width) / 2;
+            var y = (logoPanel.Height - textSize.Height) / 2;
+
+            // Glow effect
+            for (int i = 3; i > 0; i--)
+            {
+                using var glowBrush = new SolidBrush(Color.FromArgb(30 / i, 255, 255, 255));
+                e.Graphics.DrawString(text, font, glowBrush, x - i, y - i);
+                e.Graphics.DrawString(text, font, glowBrush, x + i, y + i);
+            }
+
+            // Main text
+            using var textBrush = new SolidBrush(Color.FromArgb(18, 18, 18));
+            e.Graphics.DrawString(text, font, textBrush, x, y);
+        }
+
+        private void HeaderPanel_Paint(object sender, PaintEventArgs e)
+        {
+            // Bottom border with gradient
+            using var brush = new LinearGradientBrush(
+                new RectangleF(0, headerPanel.Height - 2, headerPanel.Width, 2),
+                Color.FromArgb(50, 88, 101, 242),
+                Color.FromArgb(50, 87, 242, 135),
+                LinearGradientMode.Horizontal);
+
+            e.Graphics.FillRectangle(brush, 0, headerPanel.Height - 2, headerPanel.Width, 2);
+        }
+
+        private void ParticlePanel_Paint(object sender, PaintEventArgs e)
+        {
+            // Simple particle effect - in real implementation would use GPU
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            var time = DateTime.Now.Ticks / 10000000.0;
+            for (int i = 0; i < 50; i++)
+            {
+                var x = (float)(Math.Sin(time * 0.1 + i) * 100 + particlePanel.Width / 2);
+                var y = (float)(Math.Cos(time * 0.1 + i * 0.5) * 100 + particlePanel.Height / 2);
+                var alpha = (int)(128 + 127 * Math.Sin(time * 0.5 + i * 0.2));
+
+                using var brush = new SolidBrush(Color.FromArgb(alpha / 8, 88, 101, 242));
+                e.Graphics.FillEllipse(brush, x, y, 2, 2);
+            }
+        }
+
+        private void FLP_Bots_Paint(object sender, PaintEventArgs e)
+        {
+            if (FLP_Bots.Controls.Count == 0)
+            {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+                using var font = new Font("Segoe UI", 14F, FontStyle.Regular);
+                using var brush = new SolidBrush(Color.FromArgb(100, 176, 176, 176));
+                var text = "No bots configured. Add a bot using the form above.";
+                var size = e.Graphics.MeasureString(text, font);
+                e.Graphics.DrawString(text, font, brush,
+                    (FLP_Bots.Width - size.Width) / 2,
+                    100);
+            }
+        }
+
+        private void AnimationTimer_Tick(object sender, EventArgs e)
+        {
+            // Update hover animations
+            foreach (Control control in GetAllControls(this))
+            {
+                if (control.Tag is ButtonAnimationState animState)
+                {
+                    var elapsed = (DateTime.Now - animState.AnimationStart).TotalMilliseconds;
+                    var duration = 150.0; // 150ms animation
+
+                    if (animState.IsHovering)
+                    {
+                        animState.HoverProgress = Math.Min(1.0, elapsed / duration);
+                    }
+                    else
+                    {
+                        animState.HoverProgress = Math.Max(0.0, 1.0 - (elapsed / duration));
+                    }
+
+                    if (animState.HoverProgress > 0 && animState.HoverProgress < 1)
+                    {
+                        control.Invalidate();
+                    }
+                }
+            }
+
+            // Update particle background
+            particlePanel.Invalidate();
+
+            // Update status indicator pulse
+            var pulseTime = DateTime.Now.Ticks / 10000000.0;
+            var pulseAlpha = (int)(128 + 127 * Math.Sin(pulseTime));
+            statusIndicator.BackColor = Color.FromArgb(pulseAlpha, 87, 242, 135);
+        }
+
+        private void TransitionPanels(int index)
+        {
+            // Smooth panel transitions
+            botsPanel.Visible = index == 0;
+            hubPanel.Visible = index == 1;
+            logsPanel.Visible = index == 2;
+        }
+
+        private IEnumerable<Control> GetAllControls(Control container)
+        {
+            var controls = container.Controls.Cast<Control>();
+            return controls.SelectMany(ctrl => GetAllControls(ctrl)).Concat(controls);
+        }
+
+        // Animation state class
+        private class ButtonAnimationState
+        {
+            public bool IsHovering { get; set; }
+            public DateTime AnimationStart { get; set; }
+            public double HoverProgress { get; set; }
+            public Color BaseColor { get; set; }
         }
 
         #endregion
-        private TabControl TC_Main;
-        private TabPage Tab_Bots;
-        private TabPage Tab_Logs;
-        private RichTextBox RTB_Logs;
-        private TabPage Tab_Hub;
-        private PropertyGrid PG_Hub;
-        private Button B_Stop;
-        private Button B_Start;
+
+        // Controls
+        private TableLayoutPanel mainLayoutPanel;
+        private Panel sidebarPanel;
+        private Panel contentPanel;
+        private Panel headerPanel;
+        private Panel logoPanel;
+        private FlowLayoutPanel navButtonsPanel;
+        private Button btnNavBots;
+        private Button btnNavHub;
+        private Button btnNavLogs;
+        private Button btnNavExit;
+        private Panel sidebarBottomPanel;
+        private Button btnUpdate;
+        private Label titleLabel;
+        private FlowLayoutPanel controlButtonsPanel;
+        private Button btnStart;
+        private Button btnStop;
+        private Button btnReboot;
+        private Button btnRefreshMap;
+        private Panel botsPanel;
+        private Panel hubPanel;
+        private Panel logsPanel;
+        private Panel botHeaderPanel;
+        private Panel addBotPanel;
         private TextBox TB_IP;
-        private ComboBox CB_Routine;
         private NumericUpDown NUD_Port;
+        private ComboBox CB_Protocol;
+        private ComboBox CB_Routine;
         private Button B_New;
         private FlowLayoutPanel FLP_Bots;
-        private ComboBox CB_Protocol;
+        private PropertyGrid PG_Hub;
+        private RichTextBox RTB_Logs;
+        private Panel logsHeaderPanel;
+        private TextBox logSearchBox;
+        private Button btnClearLogs;
+        private Panel particlePanel;
+        private Panel statusIndicator;
+        private System.Windows.Forms.Timer animationTimer;
+        private NotifyIcon trayIcon;
+        private ContextMenuStrip trayContextMenu;
+        private bool isExiting = false;
+
+        // Compatibility aliases
+        private Button updater => btnUpdate;
+        private Button B_Start => btnStart;
+        private Button B_Stop => btnStop;
+        private Button B_RebootAndStop => btnReboot;
+        private Button B_RefreshMap => btnRefreshMap;
+        private TabControl TC_Main;
+        private TabPage Tab_Bots;
+        private TabPage Tab_Hub;
+        private TabPage Tab_Logs;
         private ComboBox comboBox1;
-        private Button B_RebootAndStop;
-        private Panel ButtonPanel;
-        private Button updater;
-        private Button B_RefreshMap;
     }
 }
-
