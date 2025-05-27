@@ -80,12 +80,8 @@ namespace SysBot.Pokemon.WinForms
             }
 
             LoadControls();
-<<<<<<< HEAD
-            Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "Hideout" : Config.Hub.BotName)} {SVRaidBot.Version} ({Config.Mode})";
-=======
-            Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "GenPKM.com" : Config.Hub.BotName)} {SVRaidBot.Version} ({Config.Mode})";
+            Text = $"{(string.IsNullOrEmpty(Config.Hub.BotName) ? "hideoutpk.de" : Config.Hub.BotName)} {SVRaidBot.Version} ({Config.Mode})";
             trayIcon.Text = Text;
->>>>>>> upstream/main
             Task.Run(BotMonitor);
             InitUtil.InitializeStubs(Config.Mode);
             StartTcpListener();
@@ -522,16 +518,11 @@ namespace SysBot.Pokemon.WinForms
                 _autoSaveTimer.Dispose();
             }
 
-<<<<<<< HEAD
-            // Web-API stoppen
-            WebApiIntegration.StopWebApi();
-=======
             if (animationTimer != null)
             {
                 animationTimer.Stop();
                 animationTimer.Dispose();
             }
->>>>>>> upstream/main
 
             SaveCurrentConfig();
             var bots = RunningEnvironment;
