@@ -637,7 +637,7 @@ namespace SysBot.Pokemon.WinForms
         {
             // Configure tray icon
             trayIcon.Icon = Icon;
-            trayIcon.Text = Text;
+            trayIcon.Text = string.IsNullOrEmpty(Config.Hub.BotName) ? "S/V RaidBot" : Config.Hub.BotName;
             trayIcon.Visible = false;
             trayIcon.DoubleClick += (s, e) => ShowFromTray();
 

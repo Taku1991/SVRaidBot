@@ -4,11 +4,10 @@
  
 ## Hello, and welcome to my RaidBot Project.
 
-![image](https://github.com/bdawg1989/NotRaidBot/assets/80122551/258bd7ab-0982-4641-9a3d-41bd192828dc)
+![image](https://github.com/user-attachments/assets/9d9b5244-9403-420d-8099-c6579b503073)
+![image](https://github.com/user-attachments/assets/023ba97e-0189-435d-9271-c7b3a1be7e54)
+![image](https://github.com/user-attachments/assets/cba6f9c1-ee80-4ef2-9853-527ae06e9a23)
 
-![image](https://github.com/bdawg1989/NotPaldeaNET/assets/80122551/cc9e2d9e-eb54-4717-a896-b7afa163e1c3)
-
-![image](https://github.com/bdawg1989/NotRaidBot/assets/80122551/a9aeb158-b6b6-415e-aa76-0e692d1283ce)
 
 # How-To Video
 https://youtu.be/wlFE04oiqGs?si=EDoVRaocGyCapN9n
