@@ -30,8 +30,14 @@ namespace SysBot.Pokemon.WinForms
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public static bool IsUpdating { get; set; } = false;
         private System.Windows.Forms.Timer _autoSaveTimer;
+        private System.Windows.Forms.Timer _updateCheckTimer;
         private TcpListener? _tcpListener;
         private CancellationTokenSource? _cts;
+        private bool hasUpdate = false;
+        private double pulsePhase = 0;
+        private Color lastIndicatorColor = Color.Empty;
+        private DateTime lastIndicatorUpdate = DateTime.MinValue;
+        private const int PULSE_UPDATE_INTERVAL_MS = 50; 
 
         public Main()
         {
@@ -55,14 +61,44 @@ namespace SysBot.Pokemon.WinForms
                 return;
             string discordName = string.Empty;
 
-            // Update checker
-            UpdateChecker updateChecker = new();
-            await UpdateChecker.CheckForUpdatesAsync();
+            // Update checker - check silently on startup
+            try
+            {
+                var (updateAvailable, _, _) = await UpdateChecker.CheckForUpdatesAsync(forceShow: false);
+                hasUpdate = updateAvailable;
+            }
+            catch { /* Ignore update check errors on startup */ }
 
             if (File.Exists(Program.ConfigPath))
             {
-                var lines = File.ReadAllText(Program.ConfigPath);
-                Config = JsonSerializer.Deserialize(lines, ProgramConfigContext.Default.ProgramConfig) ?? new ProgramConfig();
+                try
+                {
+                    var lines = File.ReadAllText(Program.ConfigPath);
+                    Config = JsonSerializer.Deserialize(lines, ProgramConfigContext.Default.ProgramConfig) ?? new ProgramConfig();
+                }
+                catch (Exception ex)
+                {
+                    LogUtil.LogError($"Config corrupted, trying backup: {ex.Message}", "Config");
+
+                    // Try to load from most recent backup
+                    var backupFiles = Directory.GetFiles(Path.GetDirectoryName(Program.ConfigPath), "*.backup_*")
+                        .OrderByDescending(f => new FileInfo(f).LastWriteTime)
+                        .FirstOrDefault();
+
+                    if (backupFiles != null && File.Exists(backupFiles))
+                    {
+                        var backupLines = File.ReadAllText(backupFiles);
+                        Config = JsonSerializer.Deserialize(backupLines, ProgramConfigContext.Default.ProgramConfig) ?? new ProgramConfig();
+                        File.WriteAllText(Program.ConfigPath, backupLines); // Restore backup
+                        LogUtil.LogInfo($"Restored config from backup", "Config");
+                    }
+                    else
+                    {
+                        Config = new ProgramConfig();
+                        LogUtil.LogError("No valid backup found, using new config", "Config");
+                    }
+                }
+
                 LogConfig.MaxArchiveFiles = Config.Hub.MaxArchiveFiles;
                 LogConfig.LoggingEnabled = Config.Hub.LoggingEnabled;
 
@@ -88,6 +124,9 @@ namespace SysBot.Pokemon.WinForms
             
             // Starte die Web-API
             WebApiIntegration.StartWebApi(RunningEnvironment, 6500);
+
+            // Start periodic update checks
+            StartUpdateCheckTimer();
 
             LogUtil.LogInfo($"Bot initialization complete", "System");
         }
@@ -518,6 +557,12 @@ namespace SysBot.Pokemon.WinForms
                 _autoSaveTimer.Dispose();
             }
 
+            if (_updateCheckTimer != null)
+            {
+                _updateCheckTimer.Stop();
+                _updateCheckTimer.Dispose();
+            }
+
             if (animationTimer != null)
             {
                 animationTimer.Stop();
@@ -544,9 +589,36 @@ namespace SysBot.Pokemon.WinForms
 
         private void SaveCurrentConfig()
         {
-            var cfg = GetCurrentConfiguration();
-            var lines = JsonSerializer.Serialize(cfg, ProgramConfigContext.Default.ProgramConfig);
-            File.WriteAllText(Program.ConfigPath, lines);
+            try
+            {
+                var cfg = GetCurrentConfiguration();
+                var lines = JsonSerializer.Serialize(cfg, ProgramConfigContext.Default.ProgramConfig);
+
+                // Create backup before saving
+                if (File.Exists(Program.ConfigPath))
+                {
+                    string backupPath = Program.ConfigPath + $".backup_{DateTime.Now:yyyyMMdd_HHmmss}";
+                    File.Copy(Program.ConfigPath, backupPath, true);
+
+                    // Keep only last 5 backups
+                    var backupFiles = Directory.GetFiles(Path.GetDirectoryName(Program.ConfigPath), "*.backup_*")
+                        .OrderByDescending(f => new FileInfo(f).LastWriteTime)
+                        .Skip(5);
+                    foreach (var oldBackup in backupFiles)
+                    {
+                        try { File.Delete(oldBackup); } catch { }
+                    }
+                }
+
+                // Write to temp file first, then move (atomic write)
+                string tempPath = Program.ConfigPath + ".tmp";
+                File.WriteAllText(tempPath, lines);
+                File.Move(tempPath, Program.ConfigPath, true);
+            }
+            catch (Exception ex)
+            {
+                LogUtil.LogError($"Failed to save config: {ex.Message}", "Config");
+            }
         }
 
         [JsonSerializable(typeof(ProgramConfig))]
@@ -588,26 +660,26 @@ namespace SysBot.Pokemon.WinForms
 
         private async void Updater_Click(object sender, EventArgs e)
         {
-            var (updateAvailable, updateRequired, newVersion) = await UpdateChecker.CheckForUpdatesAsync();
-            if (!updateAvailable)
-            {
-                var result = MessageBox.Show(
-                    "You are on the latest version. Would you like to re-download the current version?",
-                    "Update Check",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question);
+            var (updateAvailable, updateRequired, newVersion) = await UpdateChecker.CheckForUpdatesAsync(forceShow: true);
+            hasUpdate = updateAvailable; // Update the indicator
+        }
 
-                if (result == DialogResult.Yes)
-                {
-                    UpdateForm updateForm = new(updateRequired, newVersion, updateAvailable: false);
-                    updateForm.ShowDialog();
-                }
-            }
-            else
+        private void StartUpdateCheckTimer()
+        {
+            _updateCheckTimer = new System.Windows.Forms.Timer
             {
-                UpdateForm updateForm = new(updateRequired, newVersion, updateAvailable: true);
-                updateForm.ShowDialog();
-            }
+                Interval = 3600000, // Check every hour
+                Enabled = true
+            };
+            _updateCheckTimer.Tick += async (s, e) =>
+            {
+                try
+                {
+                    var (updateAvailable, _, _) = await UpdateChecker.CheckForUpdatesAsync(forceShow: false);
+                    hasUpdate = updateAvailable;
+                }
+                catch { /* Ignore update check errors */ }
+            };
         }
 
         private void RefreshMap_Click(object sender, EventArgs e)
@@ -775,6 +847,9 @@ namespace SysBot.Pokemon.WinForms
 
             logsPanel.PerformLayout();
             RTB_Logs.Refresh();
+
+            // Ensure control buttons are properly positioned
+            HeaderPanel_Resize(headerPanel, EventArgs.Empty);
         }
 
         private void ExitApplication()

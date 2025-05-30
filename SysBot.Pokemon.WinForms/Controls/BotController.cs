@@ -26,11 +26,39 @@ namespace SysBot.Pokemon.WinForms
         public BotController()
         {
             InitializeComponent();
-            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint |
-                    ControlStyles.DoubleBuffer | ControlStyles.ResizeRedraw, true);
+            SetStyle(ControlStyles.AllPaintingInWmPaint |
+                    ControlStyles.UserPaint |
+                    ControlStyles.DoubleBuffer |
+                    ControlStyles.ResizeRedraw |
+                    ControlStyles.OptimizedDoubleBuffer |
+                    ControlStyles.SupportsTransparentBackColor, true);
 
             ConfigureContextMenu();
             ConfigureChildControls();
+            EnableDoubleBuffering();
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED
+                return cp;
+            }
+        }
+
+        private void EnableDoubleBuffering()
+        {
+            // Enable double buffering on child controls
+            foreach (Control control in Controls)
+            {
+                typeof(Control).InvokeMember("DoubleBuffered",
+                    System.Reflection.BindingFlags.SetProperty |
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.NonPublic,
+                    null, control, new object[] { true });
+            }
         }
 
         private void ConfigureContextMenu()
@@ -137,6 +165,8 @@ namespace SysBot.Pokemon.WinForms
 
         public void ReloadStatus(BotSource<PokeBotState> b)
         {
+            if (b == null) return;
+
             ReloadStatus();
             var bot = b.Bot;
             L_Description.Text = $"[{bot.LastTime:HH:mm:ss}] {bot.Connection.Label}: {bot.LastLogged}";
@@ -333,15 +363,23 @@ namespace SysBot.Pokemon.WinForms
 
         public void ReadState()
         {
-            var bot = GetBot();
+            try
+            {
+                var bot = GetBot();
+                if (bot == null) return;
 
-            if (InvokeRequired)
-            {
-                Invoke((MethodInvoker)(() => ReloadStatus(bot)));
+                if (InvokeRequired)
+                {
+                    BeginInvoke((MethodInvoker)(() => ReloadStatus(bot)));
+                }
+                else
+                {
+                    ReloadStatus(bot);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                ReloadStatus(bot);
+                LogUtil.LogError($"Error reading state: {ex.Message}", "BotController");
             }
         }
 
@@ -351,6 +389,7 @@ namespace SysBot.Pokemon.WinForms
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.CompositingQuality = CompositingQuality.HighQuality;
 
             var rect = ClientRectangle;
             rect.Inflate(-1, -1);
@@ -397,11 +436,24 @@ namespace SysBot.Pokemon.WinForms
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // Simple static glow around the status lamp
-            var glowRect = new Rectangle(5, 5, 40, 40);
-            using (var glowBrush = new SolidBrush(Color.FromArgb(20, currentStatusColor)))
+            // Animated glow around the status lamp
+            var glowSize = 20 + (int)(5 * Math.Sin(DateTime.Now.Ticks / 10000000.0));
+            var glowRect = new Rectangle(
+                statusPanel.Width / 2 - glowSize,
+                statusPanel.Height / 2 - glowSize,
+                glowSize * 2,
+                glowSize * 2
+            );
+
+            using (var path = new GraphicsPath())
             {
-                g.FillEllipse(glowBrush, glowRect);
+                path.AddEllipse(glowRect);
+                using (var brush = new PathGradientBrush(path))
+                {
+                    brush.CenterColor = Color.FromArgb(40, currentStatusColor);
+                    brush.SurroundColors = new[] { Color.Transparent };
+                    g.FillPath(brush, path);
+                }
             }
         }
 
@@ -411,6 +463,7 @@ namespace SysBot.Pokemon.WinForms
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             var rect = PB_Lamp.ClientRectangle;
+            rect.Inflate(-1, -1);
 
             // Main status circle with gradient
             using (var path = new GraphicsPath())
@@ -430,6 +483,12 @@ namespace SysBot.Pokemon.WinForms
                 {
                     g.FillEllipse(highlightBrush, highlightRect);
                 }
+
+                // Outer ring
+                using (var pen = new Pen(Color.FromArgb(50, 0, 0, 0), 1))
+                {
+                    g.DrawEllipse(pen, rect);
+                }
             }
         }
 
@@ -440,30 +499,52 @@ namespace SysBot.Pokemon.WinForms
 
             var rect = progressBar.ClientRectangle;
 
-            // Background track
-            using (var brush = new SolidBrush(Color.FromArgb(50, 50, 50)))
+            // Background track with rounded ends
+            using (var path = new GraphicsPath())
             {
-                g.FillRectangle(brush, rect);
+                int radius = rect.Height / 2;
+                path.AddArc(rect.X, rect.Y, radius * 2, rect.Height, 90, 180);
+                path.AddArc(rect.Right - radius * 2, rect.Y, radius * 2, rect.Height, 270, 180);
+                path.CloseFigure();
+
+                using (var brush = new SolidBrush(Color.FromArgb(50, 50, 50)))
+                {
+                    g.FillPath(brush, path);
+                }
             }
 
             // Progress fill
             if (progressValue > 0)
             {
                 var fillWidth = (int)(rect.Width * progressValue);
-                var fillRect = new Rectangle(0, 0, fillWidth, rect.Height);
-
-                using (var brush = new LinearGradientBrush(fillRect,
-                    Color.FromArgb(88, 101, 242),
-                    Color.FromArgb(87, 242, 135),
-                    LinearGradientMode.Horizontal))
+                if (fillWidth > rect.Height / 2)
                 {
-                    g.FillRectangle(brush, fillRect);
-                }
+                    var fillRect = new Rectangle(0, 0, fillWidth, rect.Height);
 
-                // Glow effect
-                using (var glowBrush = new SolidBrush(Color.FromArgb(50, 87, 242, 135)))
-                {
-                    g.FillRectangle(glowBrush, fillRect.X, fillRect.Y - 2, fillRect.Width, fillRect.Height + 4);
+                    using (var path = new GraphicsPath())
+                    {
+                        int radius = rect.Height / 2;
+                        path.AddArc(fillRect.X, fillRect.Y, radius * 2, fillRect.Height, 90, 180);
+                        if (fillWidth > radius * 2)
+                        {
+                            path.AddArc(fillRect.Right - radius * 2, fillRect.Y, radius * 2, fillRect.Height, 270, 180);
+                        }
+                        path.CloseFigure();
+
+                        using (var brush = new LinearGradientBrush(fillRect,
+                            Color.FromArgb(88, 101, 242),
+                            Color.FromArgb(87, 242, 135),
+                            LinearGradientMode.Horizontal))
+                        {
+                            g.FillPath(brush, path);
+                        }
+
+                        // Glow effect
+                        using (var glowBrush = new SolidBrush(Color.FromArgb(30, 87, 242, 135)))
+                        {
+                            g.FillPath(glowBrush, path);
+                        }
+                    }
                 }
             }
         }
@@ -472,31 +553,62 @@ namespace SysBot.Pokemon.WinForms
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
 
             var btn = sender as Button;
             var rect = btn.ClientRectangle;
+            rect.Inflate(-1, -1);
 
-            // Draw rounded button with glow
+            // Draw rounded button
             using (var path = new GraphicsPath())
             {
                 SysBot.Pokemon.WinForms.GraphicsExtensions.AddRoundedRectangle(path, rect, 4);
 
-                // Glow effect
+                // Gradient background
+                using (var brush = new LinearGradientBrush(rect,
+                    ControlPaint.Light(btn.BackColor, 0.1f),
+                    btn.BackColor,
+                    LinearGradientMode.Vertical))
+                {
+                    g.FillPath(brush, path);
+                }
+
+                // Hover glow effect
                 if (btn.ClientRectangle.Contains(btn.PointToClient(MousePosition)))
                 {
-                    for (int i = 3; i > 0; i--)
+                    using (var glowBrush = new SolidBrush(Color.FromArgb(50, btn.BackColor)))
                     {
-                        var glowRect = new Rectangle(-i, -i, rect.Width + i * 2, rect.Height + i * 2);
+                        g.FillPath(glowBrush, path);
+                    }
+
+                    // Outer glow
+                    for (int i = 1; i <= 3; i++)
+                    {
+                        var glowRect = new Rectangle(-i * 2, -i * 2, rect.Width + i * 4, rect.Height + i * 4);
                         using (var glowPath = new GraphicsPath())
                         {
-                            SysBot.Pokemon.WinForms.GraphicsExtensions.AddRoundedRectangle(glowPath, glowRect, 4);
-                            using (var glowBrush = new SolidBrush(Color.FromArgb(20 / i, btn.BackColor)))
+                            SysBot.Pokemon.WinForms.GraphicsExtensions.AddRoundedRectangle(glowPath, glowRect, 4 + i);
+                            using (var outerGlowBrush = new SolidBrush(Color.FromArgb(15 / i, btn.BackColor)))
                             {
-                                g.FillPath(glowBrush, glowPath);
+                                g.FillPath(outerGlowBrush, glowPath);
                             }
                         }
                     }
                 }
+
+                // Border
+                using (var pen = new Pen(Color.FromArgb(100, btn.BackColor), 1))
+                {
+                    g.DrawPath(pen, path);
+                }
+            }
+
+            // Draw text manually with better positioning
+            using (var sf = new StringFormat())
+            {
+                sf.Alignment = StringAlignment.Center;
+                sf.LineAlignment = StringAlignment.Center;
+                g.DrawString(btn.Text, btn.Font, Brushes.White, rect, sf);
             }
         }
 
@@ -507,10 +619,13 @@ namespace SysBot.Pokemon.WinForms
 
         private void AnimationTimer_Tick(object sender, EventArgs e)
         {
+            bool needsRedraw = false;
+
             // Update hover animation
             var elapsed = (DateTime.Now - animationStart).TotalMilliseconds;
             var duration = 150.0;
 
+            var previousHoverProgress = hoverProgress;
             if (isHovering)
             {
                 hoverProgress = Math.Min(1.0f, (float)(elapsed / duration));
@@ -520,21 +635,24 @@ namespace SysBot.Pokemon.WinForms
                 hoverProgress = Math.Max(0.0f, 1.0f - (float)(elapsed / duration));
             }
 
+            if (Math.Abs(hoverProgress - previousHoverProgress) > 0.01f)
+                needsRedraw = true;
+
             // Smoothly transition status color
             if (currentStatusColor != targetStatusColor)
             {
                 currentStatusColor = Blend(targetStatusColor, currentStatusColor, 0.1);
                 PB_Lamp.BackColor = currentStatusColor;
+                statusPanel.Invalidate();
+                PB_Lamp.Invalidate();
             }
 
-            // Redraw if animating
-            if (hoverProgress > 0 && hoverProgress < 1)
+            // Redraw if needed
+            if (needsRedraw)
             {
                 Invalidate();
             }
 
-            statusPanel.Invalidate();
-            PB_Lamp.Invalidate();
             progressBar.Invalidate();
         }
 
@@ -546,21 +664,37 @@ namespace SysBot.Pokemon.WinForms
             protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
             {
                 var rc = new Rectangle(Point.Empty, e.Item.Size);
-                var c = e.Item.Selected ? Color.FromArgb(50, 50, 50) : Color.FromArgb(35, 35, 35);
+                rc.Inflate(-2, 0);
+                var c = e.Item.Selected ? Color.FromArgb(60, 60, 60) : Color.FromArgb(35, 35, 35);
                 using (var brush = new SolidBrush(c))
-                    e.Graphics.FillRectangle(brush, rc);
+                {
+                    e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                    using (var path = new GraphicsPath())
+                    {
+                        SysBot.Pokemon.WinForms.GraphicsExtensions.AddRoundedRectangle(path, rc, 4);
+                        e.Graphics.FillPath(brush, path);
+                    }
+                }
             }
 
             protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
             {
                 e.TextColor = e.Item.Enabled ? Color.FromArgb(224, 224, 224) : Color.FromArgb(100, 100, 100);
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
                 base.OnRenderItemText(e);
+            }
+
+            protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+            {
+                var rect = new Rectangle(20, 3, e.Item.Width - 40, 1);
+                using (var brush = new SolidBrush(Color.FromArgb(60, 60, 60)))
+                    e.Graphics.FillRectangle(brush, rect);
             }
         }
 
         private class ModernColorTable : ProfessionalColorTable
         {
-            public override Color MenuItemSelected => Color.FromArgb(50, 50, 50);
+            public override Color MenuItemSelected => Color.FromArgb(60, 60, 60);
             public override Color MenuItemBorder => Color.FromArgb(88, 101, 242);
             public override Color MenuBorder => Color.FromArgb(50, 50, 50);
             public override Color ToolStripDropDownBackground => Color.FromArgb(35, 35, 35);
@@ -595,6 +729,8 @@ namespace SysBot.Pokemon.WinForms
                 BotControlCommand.Idle => running && !paused,
                 BotControlCommand.Resume => paused,
                 BotControlCommand.Restart => true,
+                BotControlCommand.RebootAndStop => true,
+                BotControlCommand.RefreshMap => true,
                 _ => false,
             };
         }

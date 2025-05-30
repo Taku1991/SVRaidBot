@@ -22,6 +22,10 @@ namespace SysBot.Pokemon.WinForms
             {
                 trayIcon.Dispose();
             }
+            if (disposing && _logoBrush != null)
+            {
+                _logoBrush.Dispose();
+            }
             base.Dispose(disposing);
         }
 
@@ -34,7 +38,7 @@ namespace SysBot.Pokemon.WinForms
 
             // Initialize timer for animations
             animationTimer = new System.Windows.Forms.Timer(this.components);
-            animationTimer.Interval = 16; // ~60fps
+            animationTimer.Interval = 16; // Back to 60fps for smooth animations
             animationTimer.Tick += AnimationTimer_Tick;
 
             // Initialize tray icon
@@ -89,6 +93,7 @@ namespace SysBot.Pokemon.WinForms
             RTB_Logs = new RichTextBox();
             logsHeaderPanel = new Panel();
             logSearchBox = new TextBox();
+            searchStatusLabel = new Label();
             btnClearLogs = new Button();
 
             mainLayoutPanel.SuspendLayout();
@@ -112,21 +117,28 @@ namespace SysBot.Pokemon.WinForms
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1280, 720);
             MinimumSize = new Size(1100, 600);
-            BackColor = Color.FromArgb(23, 26, 33); 
+            BackColor = Color.FromArgb(23, 26, 33);
             Font = new Font("Segoe UI", 9F, FontStyle.Regular);
             Icon = Resources.icon;
             Name = "Main";
             StartPosition = FormStartPosition.CenterScreen;
             Text = "RaidBot Control Center";
             FormClosing += Main_FormClosing;
+            Shown += Main_Shown;
             DoubleBuffered = true;
+            SetStyle(ControlStyles.AllPaintingInWmPaint |
+                    ControlStyles.UserPaint |
+                    ControlStyles.DoubleBuffer |
+                    ControlStyles.ResizeRedraw |
+                    ControlStyles.OptimizedDoubleBuffer, true);
+            UpdateStyles();
 
-            // Particle Background Panel
-            particlePanel.Dock = DockStyle.Fill;
-            particlePanel.BackColor = Color.Transparent;
-            particlePanel.SendToBack();
-            particlePanel.Paint += ParticlePanel_Paint;
-            Controls.Add(particlePanel);
+            // Particle Background Panel - DISABLED to prevent flickering
+            // particlePanel.Dock = DockStyle.Fill;
+            // particlePanel.BackColor = Color.Transparent;
+            // particlePanel.SendToBack();
+            // particlePanel.Paint += ParticlePanel_Paint;
+            // Controls.Add(particlePanel);
 
             // Main Layout Panel
             mainLayoutPanel.ColumnCount = 2;
@@ -144,7 +156,7 @@ namespace SysBot.Pokemon.WinForms
             mainLayoutPanel.BackColor = Color.Transparent;
 
             // Sidebar Panel
-            sidebarPanel.BackColor = Color.FromArgb(18, 18, 18); 
+            sidebarPanel.BackColor = Color.FromArgb(18, 18, 18);
             sidebarPanel.Controls.Add(navButtonsPanel);
             sidebarPanel.Controls.Add(sidebarBottomPanel);
             sidebarPanel.Controls.Add(logoPanel);
@@ -164,6 +176,7 @@ namespace SysBot.Pokemon.WinForms
             logoPanel.Size = new Size(260, 100);
             logoPanel.TabIndex = 2;
             logoPanel.Paint += LogoPanel_Paint;
+            EnableDoubleBuffering(logoPanel);
 
             // Navigation Buttons Panel
             navButtonsPanel.AutoSize = false;
@@ -188,6 +201,7 @@ namespace SysBot.Pokemon.WinForms
             ConfigureExitButton();
 
             // Sidebar Bottom Panel
+            sidebarBottomPanel.SuspendLayout();
             sidebarBottomPanel.Controls.Add(btnUpdate);
             sidebarBottomPanel.Dock = DockStyle.Bottom;
             sidebarBottomPanel.Height = 80;
@@ -196,14 +210,33 @@ namespace SysBot.Pokemon.WinForms
             sidebarBottomPanel.Padding = new Padding(20, 10, 20, 20);
             sidebarBottomPanel.TabIndex = 0;
             sidebarBottomPanel.BackColor = Color.FromArgb(15, 15, 15);
+            sidebarBottomPanel.ResumeLayout(false);
 
-            // Status Indicator
-            statusIndicator.BackColor = Color.FromArgb(87, 242, 135); 
-            statusIndicator.Size = new Size(8, 8);
-            statusIndicator.Location = new Point(6, 26); 
+            statusIndicator.BackColor = Color.FromArgb(100, 100, 100); // Default gray
+            statusIndicator.Size = new Size(12, 12);
+            statusIndicator.Location = new Point(190, 10); // Fixed position from left
             statusIndicator.Name = "statusIndicator";
+            statusIndicator.Enabled = false; // Prevent mouse interaction
+            statusIndicator.Anchor = AnchorStyles.Top | AnchorStyles.Right; // Anchor to top-right
             CreateCircularRegion(statusIndicator);
-            sidebarBottomPanel.Controls.Add(statusIndicator);
+            btnUpdate.Controls.Add(statusIndicator);
+            statusIndicator.BringToFront();
+            statusIndicator.Paint += (s, e) => {
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                var rect = statusIndicator.ClientRectangle;
+                rect.Inflate(-1, -1);
+
+                using var brush = new SolidBrush(statusIndicator.BackColor);
+                e.Graphics.FillEllipse(brush, rect);
+
+                // Add inner highlight
+                if (hasUpdate)
+                {
+                    var highlightRect = new Rectangle(2, 2, 4, 4);
+                    using var highlightBrush = new SolidBrush(Color.FromArgb(200, 255, 255, 255));
+                    e.Graphics.FillEllipse(highlightBrush, highlightRect);
+                }
+            };
 
             // Update Button
             btnUpdate.BackColor = Color.FromArgb(30, 30, 30);
@@ -222,14 +255,49 @@ namespace SysBot.Pokemon.WinForms
             btnUpdate.Click += Updater_Click;
             btnUpdate.Cursor = Cursors.Hand;
             btnUpdate.Tag = new ButtonAnimationState();
+
+            // Add tooltip
+            var updateTooltip = new ToolTip();
+            updateTooltip.SetToolTip(btnUpdate, "Check for updates");
+            btnUpdate.MouseEnter += (s, e) => {
+                if (hasUpdate)
+                {
+                    updateTooltip.SetToolTip(btnUpdate, "Update available! Click to download.");
+                }
+                else
+                {
+                    updateTooltip.SetToolTip(btnUpdate, "No updates available");
+                }
+            };
+
+            // Reposition status indicator on resize
+            btnUpdate.Resize += (s, e) => {
+                if (statusIndicator != null && btnUpdate.Controls.Contains(statusIndicator))
+                {
+                    statusIndicator.Location = new Point(btnUpdate.ClientSize.Width - 25, 20);
+                }
+            };
+            // Reposition status indicator on resize
+            btnUpdate.Resize += (s, e) => {
+                if (statusIndicator != null && btnUpdate.Controls.Contains(statusIndicator))
+                {
+                    statusIndicator.Location = new Point(btnUpdate.ClientSize.Width - 25, 20);
+                }
+            };
+            btnUpdate.Layout += (s, e) => {
+                if (statusIndicator != null && btnUpdate.Controls.Contains(statusIndicator))
+                {
+                    statusIndicator.Location = new Point(btnUpdate.ClientSize.Width - 25, 20);
+                }
+            };
             btnUpdate.Paint += (s, e) => {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
 
                 var animState = btnUpdate.Tag as ButtonAnimationState;
 
-                // Draw hover glow background
-                if (animState != null && animState.HoverProgress > 0)
+                // Draw hover glow background - only if hovering
+                if (animState != null && animState.HoverProgress > 0 && animState.IsHovering)
                 {
                     using var glowBrush = new SolidBrush(Color.FromArgb((int)(20 * animState.HoverProgress), 88, 101, 242));
                     e.Graphics.FillRectangle(glowBrush, btnUpdate.ClientRectangle);
@@ -265,12 +333,37 @@ namespace SysBot.Pokemon.WinForms
                 var textX = iconX + iconSize.Width + 10;
                 var textY = (btnUpdate.Height - textSize.Height) / 2;
                 e.Graphics.DrawString(text, textFont, iconBrush, textX, textY);
+
+                // Draw glow around status indicator if update available
+                if (hasUpdate && statusIndicator != null)
+                {
+                    var indicatorBounds = new Rectangle(
+                        statusIndicator.Left - 3,
+                        statusIndicator.Top - 3,
+                        statusIndicator.Width + 6,
+                        statusIndicator.Height + 6
+                    );
+
+                    // Multi-layer glow
+                    for (int i = 3; i > 0; i--)
+                    {
+                        var glowAlpha = (int)(20 / i * (0.5 + 0.5 * Math.Sin(pulsePhase)));
+                        using var glowBrush = new SolidBrush(Color.FromArgb(glowAlpha, 87, 242, 135));
+                        var glowRect = new Rectangle(
+                            indicatorBounds.X - i * 2,
+                            indicatorBounds.Y - i * 2,
+                            indicatorBounds.Width + i * 4,
+                            indicatorBounds.Height + i * 4
+                        );
+                        e.Graphics.FillEllipse(glowBrush, glowRect);
+                    }
+                }
             };
             btnUpdate.Text = ""; // Clear text since we're drawing it manually
             ConfigureHoverAnimation(btnUpdate);
 
             // Content Panel
-            contentPanel.BackColor = Color.FromArgb(28, 28, 28); 
+            contentPanel.BackColor = Color.FromArgb(28, 28, 28);
             contentPanel.Controls.Add(botsPanel);
             contentPanel.Controls.Add(hubPanel);
             contentPanel.Controls.Add(logsPanel);
@@ -293,12 +386,14 @@ namespace SysBot.Pokemon.WinForms
             headerPanel.Size = new Size(1020, 100);
             headerPanel.TabIndex = 3;
             headerPanel.Paint += HeaderPanel_Paint;
+            headerPanel.Resize += HeaderPanel_Resize;
 
             // Title Label
             titleLabel.AutoSize = true;
             titleLabel.Font = new Font("Segoe UI", 24F, FontStyle.Bold);
-            titleLabel.ForeColor = Color.FromArgb(224, 224, 224); 
+            titleLabel.ForeColor = Color.FromArgb(224, 224, 224);
             titleLabel.Location = new Point(40, 25);
+            titleLabel.MaximumSize = new Size(400, 45);
             titleLabel.Name = "titleLabel";
             titleLabel.Size = new Size(250, 45);
             titleLabel.TabIndex = 0;
@@ -307,16 +402,18 @@ namespace SysBot.Pokemon.WinForms
             // Control Buttons Panel
             controlButtonsPanel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             controlButtonsPanel.AutoSize = true;
+            controlButtonsPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
             controlButtonsPanel.Controls.Add(btnStart);
             controlButtonsPanel.Controls.Add(btnStop);
             controlButtonsPanel.Controls.Add(btnReboot);
             controlButtonsPanel.Controls.Add(btnRefreshMap);
             controlButtonsPanel.FlowDirection = FlowDirection.LeftToRight;
-            controlButtonsPanel.Location = new Point(480, 30);
+            controlButtonsPanel.Location = new Point(contentPanel.Width - 520, 30);
             controlButtonsPanel.Name = "controlButtonsPanel";
-            controlButtonsPanel.Size = new Size(500, 40);
+            controlButtonsPanel.Size = new Size(480, 40);
             controlButtonsPanel.TabIndex = 1;
             controlButtonsPanel.BackColor = Color.Transparent;
+            controlButtonsPanel.WrapContents = false;
 
             // Control Buttons
             ConfigureControlButton(btnStart, "START ALL", Color.FromArgb(87, 242, 135)); // #57f287
@@ -353,6 +450,7 @@ namespace SysBot.Pokemon.WinForms
             CreateRoundedPanel(botHeaderPanel);
 
             // Add Bot Panel
+            addBotPanel.SuspendLayout();
             addBotPanel.Controls.Add(B_New);
             addBotPanel.Controls.Add(CB_Routine);
             addBotPanel.Controls.Add(CB_Protocol);
@@ -364,6 +462,8 @@ namespace SysBot.Pokemon.WinForms
             addBotPanel.Size = new Size(940, 100);
             addBotPanel.TabIndex = 0;
             addBotPanel.BackColor = Color.Transparent;
+            EnableDoubleBuffering(addBotPanel);
+            addBotPanel.ResumeLayout(false);
 
             // Bot Configuration Controls
             TB_IP.BackColor = Color.FromArgb(28, 28, 28);
@@ -381,10 +481,14 @@ namespace SysBot.Pokemon.WinForms
             NUD_Port.Maximum = new decimal(new int[] { 65535, 0, 0, 0 });
             NUD_Port.Value = new decimal(new int[] { 6000, 0, 0, 0 });
 
+            CB_Protocol.SuspendLayout();
             ConfigureComboBox(CB_Protocol, 280, 35, 120);
             CB_Protocol.SelectedIndexChanged += CB_Protocol_SelectedIndexChanged;
+            CB_Protocol.ResumeLayout();
 
+            CB_Routine.SuspendLayout();
             ConfigureComboBox(CB_Routine, 410, 35, 200);
+            CB_Routine.ResumeLayout();
 
             // Add Bot Button with glow effect
             B_New.BackColor = Color.FromArgb(87, 242, 135);
@@ -486,6 +590,7 @@ namespace SysBot.Pokemon.WinForms
             // Logs Header Panel
             logsHeaderPanel.BackColor = Color.FromArgb(35, 35, 35);
             logsHeaderPanel.Controls.Add(btnClearLogs);
+            logsHeaderPanel.Controls.Add(searchStatusLabel);
             logsHeaderPanel.Controls.Add(logSearchBox);
             logsHeaderPanel.Dock = DockStyle.Top;
             logsHeaderPanel.Height = 60;
@@ -504,12 +609,24 @@ namespace SysBot.Pokemon.WinForms
             logSearchBox.ForeColor = Color.FromArgb(224, 224, 224);
             logSearchBox.Location = new Point(20, 15);
             logSearchBox.Name = "logSearchBox";
-            logSearchBox.PlaceholderText = "Search logs...";
+            logSearchBox.PlaceholderText = "Search logs (Enter = next, Shift+Enter = previous)...";
             logSearchBox.Size = new Size(700, 30);
             logSearchBox.TabIndex = 0;
-            logSearchBox.TextChanged += (s, e) => {
-                // Future search implementation
-            };
+            logSearchBox.TextChanged += LogSearchBox_TextChanged;
+            logSearchBox.KeyDown += LogSearchBox_KeyDown;
+
+            // Search Status Label
+            searchStatusLabel.AutoSize = false;
+            searchStatusLabel.BackColor = Color.Transparent;
+            searchStatusLabel.Dock = DockStyle.Right;
+            searchStatusLabel.Font = new Font("Segoe UI", 9F);
+            searchStatusLabel.ForeColor = Color.FromArgb(176, 176, 176);
+            searchStatusLabel.Location = new Point(670, 15);
+            searchStatusLabel.Name = "searchStatusLabel";
+            searchStatusLabel.Size = new Size(130, 30);
+            searchStatusLabel.TabIndex = 2;
+            searchStatusLabel.Text = "";
+            searchStatusLabel.TextAlign = ContentAlignment.MiddleRight;
 
             // Clear Logs Button
             btnClearLogs.BackColor = Color.FromArgb(237, 66, 69);
@@ -525,7 +642,13 @@ namespace SysBot.Pokemon.WinForms
             btnClearLogs.Text = "CLEAR LOGS";
             btnClearLogs.UseVisualStyleBackColor = false;
             btnClearLogs.Cursor = Cursors.Hand;
-            btnClearLogs.Click += (s, e) => RTB_Logs.Clear();
+            btnClearLogs.Click += (s, e) => {
+                RTB_Logs.Clear();
+                logSearchBox.Clear();
+                searchStatusLabel.Text = "";
+                currentSearchIndex = -1;
+                lastSearchText = "";
+            };
             ConfigureGlowButton(btnClearLogs);
 
             // Rich Text Box
@@ -541,10 +664,12 @@ namespace SysBot.Pokemon.WinForms
             RTB_Logs.TabIndex = 0;
             RTB_Logs.Text = "";
             RTB_Logs.TextChanged += RTB_Logs_TextChanged;
+            RTB_Logs.KeyDown += RTB_Logs_KeyDown;
             logsContainer.Controls.Add(RTB_Logs);
 
             Controls.Add(mainLayoutPanel);
-            Controls.Add(particlePanel);
+            // Particle panel removed to prevent flickering
+            // Controls.Add(particlePanel);
 
             // Configure Tray Icon
             ConfigureTrayIcon();
@@ -570,6 +695,28 @@ namespace SysBot.Pokemon.WinForms
 
             // Start animation timer
             animationTimer.Start();
+
+            // Enable double buffering on all panels
+            EnableDoubleBuffering(mainLayoutPanel);
+            EnableDoubleBuffering(sidebarPanel);
+            EnableDoubleBuffering(contentPanel);
+            EnableDoubleBuffering(headerPanel);
+            EnableDoubleBuffering(particlePanel);
+            EnableDoubleBuffering(botsPanel);
+            EnableDoubleBuffering(hubPanel);
+            EnableDoubleBuffering(logsPanel);
+            EnableDoubleBuffering(FLP_Bots);
+        }
+
+        private void EnableDoubleBuffering(Control control)
+        {
+            if (control == null) return;
+
+            typeof(Control).InvokeMember("DoubleBuffered",
+                System.Reflection.BindingFlags.SetProperty |
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.NonPublic,
+                null, control, new object[] { true });
         }
 
         private void ConfigureExitButton()
@@ -607,15 +754,6 @@ namespace SysBot.Pokemon.WinForms
 
                 // Draw icon
                 var iconRect = new Rectangle(20, (btnNavExit.Height - 24) / 2, 24, 24);
-
-                // Apply glow effect on hover
-                if (animState != null && animState.HoverProgress > 0)
-                {
-                    var glowSize = 2 + (int)(8 * animState.HoverProgress);
-                    using var glowBrush = new SolidBrush(Color.FromArgb((int)(30 * animState.HoverProgress), 237, 66, 69));
-                    e.Graphics.FillEllipse(glowBrush, iconRect.X - glowSize / 2, iconRect.Y - glowSize / 2,
-                        iconRect.Width + glowSize, iconRect.Height + glowSize);
-                }
 
                 // Draw exit icon
                 using var iconFont = new Font("Segoe MDL2 Assets", 16F);
@@ -752,19 +890,10 @@ namespace SysBot.Pokemon.WinForms
                     e.Graphics.FillRectangle(brush, 0, 0, 4, btn.Height);
                 }
 
-                // Draw icon with glow on hover
+                // Draw icon without glow
                 var iconRect = new Rectangle(20, (btn.Height - 24) / 2, 24, 24);
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-
-                // Apply glow effect on hover
-                if (animState != null && animState.HoverProgress > 0)
-                {
-                    var glowSize = 2 + (int)(8 * animState.HoverProgress);
-                    using var glowBrush = new SolidBrush(Color.FromArgb((int)(30 * animState.HoverProgress), 87, 242, 135));
-                    e.Graphics.FillEllipse(glowBrush, iconRect.X - glowSize / 2, iconRect.Y - glowSize / 2,
-                        iconRect.Width + glowSize, iconRect.Height + glowSize);
-                }
 
                 // Draw font icon
                 using var iconFont = new Font("Segoe MDL2 Assets", 16F);
@@ -835,9 +964,10 @@ namespace SysBot.Pokemon.WinForms
             btn.FlatStyle = FlatStyle.Flat;
             btn.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
             btn.ForeColor = Color.FromArgb(28, 28, 28); // Dark text on bright buttons
-            btn.Margin = new Padding(8, 0, 8, 0);
+            btn.Margin = new Padding(5, 0, 5, 0);
             btn.Name = $"btn{text.Replace(" ", "")}";
-            btn.Size = new Size(110, 40);
+            btn.Padding = new Padding(5, 0, 5, 0);
+            btn.Size = new Size(115, 40);
             btn.TabIndex = 0;
             btn.Text = text;
             btn.UseVisualStyleBackColor = false;
@@ -969,14 +1099,17 @@ namespace SysBot.Pokemon.WinForms
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
 
-            // Draw gradient background
-            using var brush = new LinearGradientBrush(
-                logoPanel.ClientRectangle,
-                Color.FromArgb(88, 101, 242),
-                Color.FromArgb(87, 242, 135),
-                LinearGradientMode.ForwardDiagonal);
+            // Cache the gradient brush to prevent recreation
+            if (_logoBrush == null)
+            {
+                _logoBrush = new LinearGradientBrush(
+                    logoPanel.ClientRectangle,
+                    Color.FromArgb(88, 101, 242),
+                    Color.FromArgb(87, 242, 135),
+                    LinearGradientMode.ForwardDiagonal);
+            }
 
-            e.Graphics.FillRectangle(brush, logoPanel.ClientRectangle);
+            e.Graphics.FillRectangle(_logoBrush, logoPanel.ClientRectangle);
 
             // Draw text with glow
             using var font = new Font("Segoe UI", 22F, FontStyle.Bold);
@@ -985,13 +1118,9 @@ namespace SysBot.Pokemon.WinForms
             var x = (logoPanel.Width - textSize.Width) / 2;
             var y = (logoPanel.Height - textSize.Height) / 2;
 
-            // Glow effect
-            for (int i = 3; i > 0; i--)
-            {
-                using var glowBrush = new SolidBrush(Color.FromArgb(30 / i, 255, 255, 255));
-                e.Graphics.DrawString(text, font, glowBrush, x - i, y - i);
-                e.Graphics.DrawString(text, font, glowBrush, x + i, y + i);
-            }
+            // Simple glow effect - reduced layers
+            using var glowBrush = new SolidBrush(Color.FromArgb(30, 255, 255, 255));
+            e.Graphics.DrawString(text, font, glowBrush, x - 2, y - 2);
 
             // Main text
             using var textBrush = new SolidBrush(Color.FromArgb(18, 18, 18));
@@ -1010,21 +1139,301 @@ namespace SysBot.Pokemon.WinForms
             e.Graphics.FillRectangle(brush, 0, headerPanel.Height - 2, headerPanel.Width, 2);
         }
 
+        private void HeaderPanel_Resize(object sender, EventArgs e)
+        {
+            // Reposition control buttons panel to ensure it stays properly aligned
+            if (controlButtonsPanel != null && headerPanel != null)
+            {
+                int rightMargin = 40;
+                int minLeftPosition = titleLabel.Right + 50; // Ensure space between title and buttons
+                int desiredX = headerPanel.Width - controlButtonsPanel.Width - rightMargin;
+
+                // Ensure buttons don't overlap with title
+                controlButtonsPanel.Location = new Point(Math.Max(minLeftPosition, desiredX), 30);
+            }
+        }
+
+        private void Main_Shown(object sender, EventArgs e)
+        {
+            // Ensure proper layout when form is first shown
+            HeaderPanel_Resize(headerPanel, EventArgs.Empty);
+
+            // Ensure status indicator is properly positioned
+            if (statusIndicator != null && btnUpdate != null)
+            {
+                statusIndicator.Location = new Point(btnUpdate.ClientSize.Width - 25, 20);
+            }
+
+            Refresh();
+        }
+
+        private int currentSearchIndex = -1;
+        private string lastSearchText = "";
+
+        private void LogSearchBox_TextChanged(object sender, EventArgs e)
+        {
+            // Reset search when text changes
+            currentSearchIndex = -1;
+            lastSearchText = logSearchBox.Text;
+            searchStatusLabel.Text = "";
+
+            // Clear any existing highlights
+            if (RTB_Logs.Text.Length > 0)
+            {
+                RTB_Logs.SelectAll();
+                RTB_Logs.SelectionBackColor = RTB_Logs.BackColor;
+                RTB_Logs.SelectionColor = RTB_Logs.ForeColor;
+                RTB_Logs.Select(0, 0);
+            }
+
+            // Perform initial search if text is not empty
+            if (!string.IsNullOrWhiteSpace(logSearchBox.Text))
+            {
+                HighlightAllMatches();
+
+                // Update match count
+                string searchText = logSearchBox.Text.ToLower();
+                string content = RTB_Logs.Text.ToLower();
+                int matchCount = CountMatches(searchText, content);
+
+                if (matchCount > 0)
+                {
+                    searchStatusLabel.ForeColor = Color.FromArgb(87, 242, 135);
+                    searchStatusLabel.Text = $"{matchCount} matches";
+                }
+                else
+                {
+                    searchStatusLabel.ForeColor = Color.FromArgb(237, 66, 69);
+                    searchStatusLabel.Text = "No matches";
+                }
+            }
+        }
+
+        private void LogSearchBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true; // Prevent the ding sound
+                if (e.Shift)
+                    FindPrevious();
+                else
+                    FindNext();
+            }
+            else if (e.KeyCode == Keys.Escape)
+            {
+                // Clear search
+                logSearchBox.Clear();
+                searchStatusLabel.Text = "";
+                RTB_Logs.Focus();
+            }
+            else if (e.KeyCode == Keys.F3 || (e.Control && e.KeyCode == Keys.F))
+            {
+                // Allow F3 or Ctrl+F to focus search box
+                e.SuppressKeyPress = true;
+                logSearchBox.Focus();
+                logSearchBox.SelectAll();
+            }
+        }
+
+        private void HighlightAllMatches()
+        {
+            if (string.IsNullOrWhiteSpace(logSearchBox.Text) || RTB_Logs.Text.Length == 0)
+                return;
+
+            string searchText = logSearchBox.Text.ToLower();
+            string content = RTB_Logs.Text.ToLower();
+
+            RTB_Logs.SuspendLayout();
+
+            int index = 0;
+            while (index < content.Length)
+            {
+                index = content.IndexOf(searchText, index);
+                if (index == -1)
+                    break;
+
+                RTB_Logs.Select(index, searchText.Length);
+                RTB_Logs.SelectionBackColor = Color.FromArgb(88, 101, 242); // Blue highlight
+                RTB_Logs.SelectionColor = Color.White;
+
+                index += searchText.Length;
+            }
+
+            RTB_Logs.Select(0, 0);
+            RTB_Logs.ResumeLayout();
+        }
+
+        private void FindNext()
+        {
+            if (string.IsNullOrWhiteSpace(logSearchBox.Text) || RTB_Logs.Text.Length == 0)
+                return;
+
+            string searchText = logSearchBox.Text.ToLower();
+            string content = RTB_Logs.Text.ToLower();
+
+            // Start searching from current position
+            int startIndex = currentSearchIndex + 1;
+            if (startIndex >= content.Length)
+                startIndex = 0;
+
+            int index = content.IndexOf(searchText, startIndex);
+
+            // If not found from current position, try from beginning
+            if (index == -1 && startIndex > 0)
+            {
+                index = content.IndexOf(searchText, 0);
+            }
+
+            if (index != -1)
+            {
+                // First restore previous highlight to blue
+                if (currentSearchIndex >= 0 && currentSearchIndex < content.Length - searchText.Length + 1)
+                {
+                    RTB_Logs.Select(currentSearchIndex, searchText.Length);
+                    RTB_Logs.SelectionBackColor = Color.FromArgb(88, 101, 242);
+                    RTB_Logs.SelectionColor = Color.White;
+                }
+
+                // Highlight current match with different color
+                RTB_Logs.Select(index, searchText.Length);
+                RTB_Logs.SelectionBackColor = Color.FromArgb(87, 242, 135); // Green for current
+                RTB_Logs.SelectionColor = Color.Black;
+                RTB_Logs.ScrollToCaret();
+
+                currentSearchIndex = index;
+
+                // Update search status
+                int matchCount = CountMatches(searchText, content);
+                int currentMatch = CountMatchesBefore(searchText, content, index) + 1;
+                searchStatusLabel.ForeColor = Color.FromArgb(87, 242, 135);
+                searchStatusLabel.Text = $"{currentMatch} of {matchCount}";
+            }
+            else
+            {
+                // No matches found
+                searchStatusLabel.ForeColor = Color.FromArgb(237, 66, 69);
+                searchStatusLabel.Text = "No matches";
+                System.Media.SystemSounds.Beep.Play();
+            }
+        }
+
+        private void FindPrevious()
+        {
+            if (string.IsNullOrWhiteSpace(logSearchBox.Text) || RTB_Logs.Text.Length == 0)
+                return;
+
+            string searchText = logSearchBox.Text.ToLower();
+            string content = RTB_Logs.Text.ToLower();
+
+            // Start searching from current position backwards
+            int startIndex = currentSearchIndex - 1;
+            if (startIndex < 0 || currentSearchIndex == -1)
+                startIndex = content.Length - searchText.Length;
+
+            // Ensure we don't go beyond the content length
+            if (startIndex >= content.Length)
+                startIndex = content.Length - 1;
+
+            int index = -1;
+            if (startIndex >= 0 && startIndex < content.Length)
+            {
+                // Search backwards from current position
+                string substring = content.Substring(0, Math.Min(startIndex + searchText.Length, content.Length));
+                index = substring.LastIndexOf(searchText);
+            }
+
+            // If not found from current position, wrap around to end
+            if (index == -1)
+            {
+                index = content.LastIndexOf(searchText);
+            }
+
+            if (index != -1)
+            {
+                // First restore previous highlight to blue
+                if (currentSearchIndex >= 0 && currentSearchIndex < content.Length - searchText.Length + 1)
+                {
+                    RTB_Logs.Select(currentSearchIndex, searchText.Length);
+                    RTB_Logs.SelectionBackColor = Color.FromArgb(88, 101, 242);
+                    RTB_Logs.SelectionColor = Color.White;
+                }
+
+                // Highlight current match with different color
+                RTB_Logs.Select(index, searchText.Length);
+                RTB_Logs.SelectionBackColor = Color.FromArgb(87, 242, 135); // Green for current
+                RTB_Logs.SelectionColor = Color.Black;
+                RTB_Logs.ScrollToCaret();
+
+                currentSearchIndex = index;
+
+                // Update search status
+                int matchCount = CountMatches(searchText, content);
+                int currentMatch = CountMatchesBefore(searchText, content, index) + 1;
+                searchStatusLabel.ForeColor = Color.FromArgb(87, 242, 135);
+                searchStatusLabel.Text = $"{currentMatch} of {matchCount}";
+            }
+            else
+            {
+                // No matches found
+                searchStatusLabel.ForeColor = Color.FromArgb(237, 66, 69);
+                searchStatusLabel.Text = "No matches";
+                System.Media.SystemSounds.Beep.Play();
+            }
+        }
+
+        private void RTB_Logs_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Control && e.KeyCode == Keys.F)
+            {
+                e.SuppressKeyPress = true;
+                logSearchBox.Focus();
+                logSearchBox.SelectAll();
+            }
+            else if (e.KeyCode == Keys.F3)
+            {
+                e.SuppressKeyPress = true;
+                if (!string.IsNullOrWhiteSpace(logSearchBox.Text))
+                {
+                    if (e.Shift)
+                        FindPrevious();
+                    else
+                        FindNext();
+                }
+                else
+                {
+                    logSearchBox.Focus();
+                    logSearchBox.SelectAll();
+                }
+            }
+        }
+
+        private int CountMatches(string searchText, string content)
+        {
+            int count = 0;
+            int index = 0;
+            while ((index = content.IndexOf(searchText, index)) != -1)
+            {
+                count++;
+                index += searchText.Length;
+            }
+            return count;
+        }
+
+        private int CountMatchesBefore(string searchText, string content, int beforeIndex)
+        {
+            int count = 0;
+            int index = 0;
+            while ((index = content.IndexOf(searchText, index)) != -1 && index < beforeIndex)
+            {
+                count++;
+                index += searchText.Length;
+            }
+            return count;
+        }
+
         private void ParticlePanel_Paint(object sender, PaintEventArgs e)
         {
-            // Simple particle effect - in real implementation would use GPU
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-
-            var time = DateTime.Now.Ticks / 10000000.0;
-            for (int i = 0; i < 50; i++)
-            {
-                var x = (float)(Math.Sin(time * 0.1 + i) * 100 + particlePanel.Width / 2);
-                var y = (float)(Math.Cos(time * 0.1 + i * 0.5) * 100 + particlePanel.Height / 2);
-                var alpha = (int)(128 + 127 * Math.Sin(time * 0.5 + i * 0.2));
-
-                using var brush = new SolidBrush(Color.FromArgb(alpha / 8, 88, 101, 242));
-                e.Graphics.FillEllipse(brush, x, y, 2, 2);
-            }
+            // Disabled to prevent flickering
         }
 
         private void FLP_Bots_Paint(object sender, PaintEventArgs e)
@@ -1044,15 +1453,75 @@ namespace SysBot.Pokemon.WinForms
             }
         }
 
+        private void UpdateStatusIndicatorPulse()
+        {
+            // Throttle updates to reduce flickering
+            var now = DateTime.Now;
+            if ((now - lastIndicatorUpdate).TotalMilliseconds < PULSE_UPDATE_INTERVAL_MS)
+                return;
+
+            lastIndicatorUpdate = now;
+
+            // Increment phase for smooth animation
+            pulsePhase += 0.1; // Adjusted for new update interval
+            if (pulsePhase > Math.PI * 2)
+                pulsePhase -= Math.PI * 2;
+
+            Color newColor;
+
+            if (hasUpdate)
+            {
+                // Calculate pulse using smooth sine wave
+                double pulse = (Math.Sin(pulsePhase) + 1) / 2; // Normalized to 0-1
+
+                // Green pulsing when update available
+                int minAlpha = 150;
+                int maxAlpha = 255;
+                int alpha = (int)(minAlpha + (maxAlpha - minAlpha) * pulse);
+
+                newColor = Color.FromArgb(alpha, 87, 242, 135);
+            }
+            else
+            {
+                // Dim gray when no update - no pulsing
+                newColor = Color.FromArgb(100, 100, 100);
+            }
+
+            // Only update and invalidate if color actually changed
+            if (newColor != lastIndicatorColor)
+            {
+                lastIndicatorColor = newColor;
+                statusIndicator.BackColor = newColor;
+                statusIndicator.Invalidate();
+
+                // Only invalidate button glow area when update is available and color changed
+                if (hasUpdate && btnUpdate != null)
+                {
+                    btnUpdate.Invalidate(new Rectangle(
+                        statusIndicator.Left - 10,
+                        statusIndicator.Top - 10,
+                        statusIndicator.Width + 20,
+                        statusIndicator.Height + 20
+                    ));
+                }
+            }
+        }
+
+        // Also update the AnimationTimer_Tick method to be more efficient:
         private void AnimationTimer_Tick(object sender, EventArgs e)
         {
-            // Update hover animations
+            bool needsUpdate = false;
+            var controlsToUpdate = new List<Control>();
+
+            // Update hover animations only for controls that need it
             foreach (Control control in GetAllControls(this))
             {
                 if (control.Tag is ButtonAnimationState animState)
                 {
                     var elapsed = (DateTime.Now - animState.AnimationStart).TotalMilliseconds;
                     var duration = 150.0; // 150ms animation
+
+                    var oldProgress = animState.HoverProgress;
 
                     if (animState.IsHovering)
                     {
@@ -1063,20 +1532,25 @@ namespace SysBot.Pokemon.WinForms
                         animState.HoverProgress = Math.Max(0.0, 1.0 - (elapsed / duration));
                     }
 
-                    if (animState.HoverProgress > 0 && animState.HoverProgress < 1)
+                    // Only add to update list if progress actually changed significantly
+                    // and animation is in progress (not at 0 or 1)
+                    if (Math.Abs(animState.HoverProgress - oldProgress) > 0.01 &&
+                        animState.HoverProgress > 0.001 && animState.HoverProgress < 0.999)
                     {
-                        control.Invalidate();
+                        controlsToUpdate.Add(control);
+                        needsUpdate = true;
                     }
                 }
             }
 
-            // Update particle background
-            particlePanel.Invalidate();
+            // Batch invalidate controls
+            foreach (var control in controlsToUpdate)
+            {
+                control.Invalidate();
+            }
 
-            // Update status indicator pulse
-            var pulseTime = DateTime.Now.Ticks / 10000000.0;
-            var pulseAlpha = (int)(128 + 127 * Math.Sin(pulseTime));
-            statusIndicator.BackColor = Color.FromArgb(pulseAlpha, 87, 242, 135);
+            // Update status indicator pulse with throttling
+            UpdateStatusIndicatorPulse();
         }
 
         private void TransitionPanels(int index)
@@ -1138,6 +1612,7 @@ namespace SysBot.Pokemon.WinForms
         private RichTextBox RTB_Logs;
         private Panel logsHeaderPanel;
         private TextBox logSearchBox;
+        private Label searchStatusLabel;
         private Button btnClearLogs;
         private Panel particlePanel;
         private Panel statusIndicator;
@@ -1145,6 +1620,7 @@ namespace SysBot.Pokemon.WinForms
         private NotifyIcon trayIcon;
         private ContextMenuStrip trayContextMenu;
         private bool isExiting = false;
+        private LinearGradientBrush _logoBrush;
 
         // Compatibility aliases
         private Button updater => btnUpdate;
