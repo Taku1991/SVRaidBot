@@ -31,7 +31,7 @@ namespace SysBot.Pokemon.WinForms
             bool updateRequired = latestRelease.Prerelease == false && IsUpdateRequired(latestRelease.Body);
             string? newVersion = latestRelease.TagName;
 
-            if (updateAvailable || forceShow)
+            if (forceShow)
             {
                 UpdateForm updateForm = new(updateRequired, newVersion ?? "", updateAvailable);
                 updateForm.ShowDialog();

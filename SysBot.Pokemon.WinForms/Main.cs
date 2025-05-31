@@ -568,7 +568,15 @@ namespace SysBot.Pokemon.WinForms
                 animationTimer.Stop();
                 animationTimer.Dispose();
             }
-
+            // Create a backup copy of config
+            try
+            {
+                if (File.Exists(Program.ConfigPath))
+                {
+                    File.Copy(Program.ConfigPath, Program.ConfigPath + ".backup", true);
+                }
+            }
+            catch { }
             SaveCurrentConfig();
             var bots = RunningEnvironment;
             if (!bots.IsRunning)
@@ -594,23 +602,6 @@ namespace SysBot.Pokemon.WinForms
                 var cfg = GetCurrentConfiguration();
                 var lines = JsonSerializer.Serialize(cfg, ProgramConfigContext.Default.ProgramConfig);
 
-                // Create backup before saving
-                if (File.Exists(Program.ConfigPath))
-                {
-                    string backupPath = Program.ConfigPath + $".backup_{DateTime.Now:yyyyMMdd_HHmmss}";
-                    File.Copy(Program.ConfigPath, backupPath, true);
-
-                    // Keep only last 5 backups
-                    var backupFiles = Directory.GetFiles(Path.GetDirectoryName(Program.ConfigPath), "*.backup_*")
-                        .OrderByDescending(f => new FileInfo(f).LastWriteTime)
-                        .Skip(5);
-                    foreach (var oldBackup in backupFiles)
-                    {
-                        try { File.Delete(oldBackup); } catch { }
-                    }
-                }
-
-                // Write to temp file first, then move (atomic write)
                 string tempPath = Program.ConfigPath + ".tmp";
                 File.WriteAllText(tempPath, lines);
                 File.Move(tempPath, Program.ConfigPath, true);
