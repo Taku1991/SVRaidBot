@@ -1235,8 +1235,12 @@ namespace SysBot.Pokemon.SV.BotRaid
         {
             Log("Returning to overworld...");
 
-            while (!await IsOnOverworld(_overworldOffset, token).ConfigureAwait(false))
+            int attempts = 0;
+            while (!await IsOnOverworld(_overworldOffset, token).ConfigureAwait(false) && attempts < 10)
+            {
                 await Click(A, 2_000, token).ConfigureAwait(false);
+                attempts++;
+            }
 
             if (!await RecoverToOverworld(token).ConfigureAwait(false))
             {
