@@ -117,7 +117,6 @@ namespace SysBot.Pokemon.WinForms
             trayIcon.Text = (Config?.Hub?.BotName != null && !string.IsNullOrEmpty(Config.Hub.BotName)) ? Config.Hub.BotName : "S/V RaidBot";
             Task.Run(BotMonitor);
             InitUtil.InitializeStubs(Config.Mode);
-            StartTcpListener();
             
             // Starte die Web-API
             WebApiIntegration.StartWebApi(RunningEnvironment, 6500);
