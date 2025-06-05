@@ -20,7 +20,7 @@ public static class WebApiExtensions
     private static CancellationTokenSource? _monitorCts;
     private static Main? _main;
 
-    private const int WebPort = 9090;
+    private const int WebPort = 8080;
     private static int _tcpPort = 0;
 
     public static void InitWebServer(this Main mainForm)
@@ -31,7 +31,7 @@ public static class WebApiExtensions
         {
             if (IsPortInUse(WebPort))
             {
-                _tcpPort = FindAvailablePort(9091);
+                _tcpPort = FindAvailablePort(8081);
                 StartTcpOnly();
 
                 // Start monitoring for master failure
@@ -42,7 +42,7 @@ public static class WebApiExtensions
             // Try to add URL reservation for network access
             TryAddUrlReservation(WebPort);
 
-            _tcpPort = FindAvailablePort(9091);
+            _tcpPort = FindAvailablePort(8081);
             StartFullServer();
         }
         catch (Exception ex)
