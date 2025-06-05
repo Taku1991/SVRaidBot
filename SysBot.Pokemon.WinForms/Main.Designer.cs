@@ -565,8 +565,6 @@ namespace SysBot.Pokemon.WinForms
 
             // Logs Panel
             logsPanel.BackColor = Color.Transparent;
-            logsPanel.Controls.Add(RTB_Logs);
-            logsPanel.Controls.Add(logsHeaderPanel);
             logsPanel.Dock = DockStyle.Fill;
             logsPanel.Location = new Point(0, 100);
             logsPanel.Name = "logsPanel";
@@ -586,6 +584,7 @@ namespace SysBot.Pokemon.WinForms
             logsContainer.Size = new Size(940, 470);
             CreateRoundedPanel(logsContainer);
             logsPanel.Controls.Add(logsContainer);
+            logsPanel.Controls.Add(logsHeaderPanel);
 
             // Logs Header Panel
             logsHeaderPanel.BackColor = Color.FromArgb(35, 35, 35);
@@ -1555,10 +1554,28 @@ namespace SysBot.Pokemon.WinForms
 
         private void TransitionPanels(int index)
         {
-            // Smooth panel transitions
-            botsPanel.Visible = index == 0;
-            hubPanel.Visible = index == 1;
-            logsPanel.Visible = index == 2;
+            // Hide all panels
+            botsPanel.Visible = false;
+            hubPanel.Visible = false;
+            logsPanel.Visible = false;
+
+            // Force refresh of content panel
+            contentPanel.Refresh();
+
+            // Show the selected panel
+            switch (index)
+            {
+                case 0:
+                    botsPanel.Visible = true;
+                    break;
+                case 1:
+                    hubPanel.Visible = true;
+                    break;
+                case 2:
+                    logsPanel.Visible = true;
+                    logsPanel.Refresh(); // Extra refresh for logs panel
+                    break;
+            }
         }
 
         private IEnumerable<Control> GetAllControls(Control container)

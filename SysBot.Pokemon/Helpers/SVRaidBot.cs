@@ -4,7 +4,7 @@
     {
 
 
-        public const string Version = "v1.6.0";
+        public const string Version = "v1.7.0";
         public const string Repo = "https://github.com/Taku1991/SVRaidBot";
 
 

@@ -4133,6 +4133,12 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
                     if (denLocations.TryGetValue(raidIdentifier, out var coordinates))
                     {
                         int globalIndex = startingIndex + (i / Raid.SIZE);
+
+                        if (mapType == TeraRaidMapParent.Blueberry)
+                        {
+                            globalIndex -= 1;
+                        }
+
                         activeRaids.Add((raidIdentifier, coordinates, globalIndex, raid.Seed, raid.Flags, raid.IsEvent));
                     }
                 }

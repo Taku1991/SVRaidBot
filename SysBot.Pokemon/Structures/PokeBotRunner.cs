@@ -1,5 +1,6 @@
 ﻿using PKHeX.Core;
 using SysBot.Base;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace SysBot.Pokemon
@@ -9,7 +10,7 @@ namespace SysBot.Pokemon
         PokeRaidHubConfig Config { get; }
         bool RunOnce { get; }
         bool IsRunning { get; }
-
+        IList<BotSource<PokeBotState>> Bots { get; }
         void StartAll();
 
         void StopAll();
@@ -33,7 +34,7 @@ namespace SysBot.Pokemon
         private readonly BotFactory<T> Factory;
 
         public PokeRaidHubConfig Config => Hub.Config;
-
+        IList<BotSource<PokeBotState>> IPokeBotRunner.Bots => base.Bots;
         protected PokeBotRunner(PokeRaidHub<T> hub, BotFactory<T> factory)
         {
             Hub = hub;

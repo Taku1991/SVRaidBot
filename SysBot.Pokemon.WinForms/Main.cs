@@ -14,8 +14,6 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Net;
-using System.Text;
 using System.ComponentModel;
 
 namespace SysBot.Pokemon.WinForms
@@ -25,7 +23,6 @@ namespace SysBot.Pokemon.WinForms
         private readonly List<PokeBotState> Bots = new();
         private ProgramConfig Config { get; set; }
         private IPokeBotRunner RunningEnvironment { get; set; }
-
         public readonly ISwitchConnectionAsync? SwitchConnection;
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public static bool IsUpdating { get; set; } = false;
@@ -129,6 +126,8 @@ namespace SysBot.Pokemon.WinForms
             StartUpdateCheckTimer();
 
             LogUtil.LogInfo($"Bot initialization complete", "System");
+
+            this.InitWebServer();
         }
 
         private void RTB_Logs_TextChanged(object sender, EventArgs e)
@@ -160,310 +159,6 @@ namespace SysBot.Pokemon.WinForms
                 }
                 await Task.Delay(2_000).ConfigureAwait(false);
             }
-        }
-
-        private void StartTcpListener(int preferredPort = 0)
-        {
-            if (_tcpListener != null) return;
-            int basePort = 55000;
-            int portRange = 5000;
-
-            int initialPort = preferredPort > 0
-                ? preferredPort
-                : basePort + (Environment.ProcessId % portRange);
-
-            const int maxAttempts = 10;
-            int currentAttempt = 0;
-            int portToUse = initialPort;
-            bool success = false;
-
-            while (!success && currentAttempt < maxAttempts)
-            {
-                try
-                {
-                    currentAttempt++;
-                    if (currentAttempt > 1)
-                    {
-                        int randomOffset = (Environment.ProcessId + Environment.TickCount) % portRange;
-                        portToUse = basePort + ((initialPort + randomOffset * currentAttempt) % portRange);
-                        LogUtil.LogInfo($"TCP port conflict detected. Trying alternate port {portToUse} (attempt {currentAttempt}/{maxAttempts})", "TCP");
-                    }
-                    _cts = new CancellationTokenSource();
-                    _tcpListener = new TcpListener(IPAddress.Loopback, portToUse);
-                    _tcpListener.Start();
-                    success = true;
-                    LogUtil.LogInfo($"TCP Listener started on port {portToUse}", "TCP");
-                    string portInfoPath = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), $"SVRaidBot_{Environment.ProcessId}.port");
-                    File.WriteAllText(portInfoPath, portToUse.ToString());
-                    Task.Run(() => AcceptLoop(_cts.Token));
-                }
-                catch (Exception ex)
-                {
-                    if (currentAttempt >= maxAttempts)
-                    {
-                        LogUtil.LogError($"All attempts to start TCP listener failed. Last attempt on port {portToUse}: {ex.Message}", "TCP");
-
-                        try
-                        {
-                            string portInfoPath = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), $"SVRaidBot_{Environment.ProcessId}.port");
-                            File.WriteAllText(portInfoPath, "ERROR:" + ex.Message);
-                        }
-                        catch { }
-                    }
-                    else
-                    {
-                        LogUtil.LogError($"Failed to start TCP listener on port {portToUse}: {ex.Message}. Will try another port.", "TCP");
-
-                        // Clean up before retry
-                        _tcpListener = null;
-                        _cts?.Dispose();
-                        _cts = null;
-                    }
-                }
-            }
-        }
-
-        private async Task AcceptLoop(CancellationToken ct)
-        {
-            while (!ct.IsCancellationRequested && _tcpListener != null)
-            {
-                try
-                {
-                    var client = await _tcpListener.AcceptTcpClientAsync();
-                    if (client != null)
-                        _ = Task.Run(() => HandleClient(client, ct));
-                }
-                catch (ObjectDisposedException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    LogUtil.LogError($"AcceptLoop error: {ex.Message}", "TCP");
-                    await Task.Delay(500);
-                }
-            }
-        }
-
-        private async Task HandleClient(TcpClient client, CancellationToken ct)
-        {
-            using (client)
-            {
-                try
-                {
-                    var stream = client.GetStream();
-                    using var reader = new StreamReader(stream, Encoding.UTF8);
-                    using var writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
-
-                    var commandLine = await reader.ReadLineAsync();
-                    if (string.IsNullOrEmpty(commandLine)) return;
-
-                    LogUtil.LogInfo($"Received command: {commandLine}", "TCP");
-                    string response = ExecuteBotCommand(commandLine.Trim());
-                    await writer.WriteLineAsync(response);
-                }
-                catch (Exception ex)
-                {
-                    LogUtil.LogError($"HandleClient error: {ex.Message}", "TCP");
-                }
-            }
-        }
-
-        private string ExecuteBotCommand(string cmd)
-        {
-            switch (cmd)
-            {
-                case "StopAll":
-                    RunningEnvironment.StopAll();
-                    return "STOPPED";
-
-                case "StartAll":
-                    // Reset error state when starting
-                    SysBot.Pokemon.SV.BotRaid.RotatingRaidBotSV.HasErrored = false;
-                    RunningEnvironment.InitializeStart();
-                    foreach (var c in FLP_Bots.Controls.OfType<BotController>())
-                        c.SendCommand(BotControlCommand.Start);
-                    return "STARTED";
-
-                case "IdleAll":
-                    foreach (var c in FLP_Bots.Controls.OfType<BotController>())
-                        c.SendCommand(BotControlCommand.Idle);
-                    return "IDLING";
-
-                case "ResumeAll":
-                    // Reset error state when resuming
-                    SysBot.Pokemon.SV.BotRaid.RotatingRaidBotSV.HasErrored = false;
-                    foreach (var c in FLP_Bots.Controls.OfType<BotController>())
-                        c.SendCommand(BotControlCommand.Resume);
-                    return "RESUMED";
-
-                case "RestartAll":
-                    // Reset error state when restarting
-                    SysBot.Pokemon.SV.BotRaid.RotatingRaidBotSV.HasErrored = false;
-                    foreach (var c in FLP_Bots.Controls.OfType<BotController>())
-                    {
-                        RunningEnvironment.InitializeStart();
-                        c.SendCommand(BotControlCommand.Restart);
-                    }
-                    return "RESTARTING";
-
-                case "RebootAll":
-                    // Reset error state when rebooting
-                    SysBot.Pokemon.SV.BotRaid.RotatingRaidBotSV.HasErrored = false;
-                    foreach (var c in FLP_Bots.Controls.OfType<BotController>())
-                        c.SendCommand(BotControlCommand.RebootAndStop);
-                    return "REBOOTING";
-
-                case "Status":
-                    // Check actual status of each bot's routine
-                    foreach (var c in FLP_Bots.Controls.OfType<BotController>())
-                    {
-                        try
-                        {
-                            var botState = c.ReadBotState();
-                            // If any bot is not idle, return its status
-                            if (botState != "IDLE")
-                            {
-                                return botState;
-                            }
-                        }
-                        catch
-                        {
-                            return "ERROR"; // Error reading state
-                        }
-                    }
-                    return "IDLE"; // All bots are idle
-
-                case "IsReady":
-                    // First check - are there any configured bots?
-                    if (FLP_Bots.Controls.OfType<BotController>().Count() == 0)
-                    {
-                        LogUtil.LogInfo("No bots are configured", "TCP");
-                        return "NOT_READY";
-                    }
-
-                    // Second check - static error flag
-                    try
-                    {
-                        if (SysBot.Pokemon.SV.BotRaid.RotatingRaidBotSV.HasErrored)
-                        {
-                            LogUtil.LogInfo("Static HasErrored flag is true", "TCP");
-                            return "NOT_READY";
-                        }
-                    }
-                    catch { /* Ignore if not available */ }
-
-                    // Third check - scan log records for recent errors
-                    // If any error message was logged in the last 10 minutes, consider the bot not ready
-                    // This ensures we detect post-crash scenarios even when IsRunning is false
-                    try
-                    {
-                        // Check the RTB_Logs text for recent error messages
-                        string logText = RTB_Logs.Text;
-                        if (!string.IsNullOrEmpty(logText))
-                        {
-                            // First check for the most definitive crash message
-                            if (logText.Contains("Bot has crashed"))
-                            {
-                                LogUtil.LogInfo("Found 'Bot has crashed' in logs", "TCP");
-                                return "NOT_READY";
-                            }
-
-                            // Then check for ending message
-                            if (logText.Contains("Ending RotatingRaidBotSV loop"))
-                            {
-                                LogUtil.LogInfo("Found 'Ending RotatingRaidBotSV loop' in logs", "TCP");
-                                return "NOT_READY";
-                            }
-
-                            // Check if there are connection errors in recent logs
-                            if (logText.Contains("Connection error"))
-                            {
-                                LogUtil.LogInfo("Found 'Connection error' in logs", "TCP");
-                                return "NOT_READY";
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogUtil.LogError($"Error checking logs: {ex.Message}", "TCP");
-                    }
-
-                    // Fourth check - inspect each bot's state
-                    foreach (var c in FLP_Bots.Controls.OfType<BotController>())
-                    {
-                        try
-                        {
-                            var botSource = c.GetBot();
-                            if (botSource == null)
-                            {
-                                LogUtil.LogInfo("Bot source is null", "TCP");
-                                return "NOT_READY";
-                            }
-
-                            // Check if the bot is in a known error state
-                            string state = c.ReadBotState();
-                            if (state == "ERROR" || state == "STOPPING")
-                            {
-                                LogUtil.LogInfo($"Bot state is {state}", "TCP");
-                                return "NOT_READY";
-                            }
-
-                            // Check for any connection issues
-                            try
-                            {
-                                if (botSource.Bot == null || botSource.Bot.Connection == null)
-                                {
-                                    LogUtil.LogInfo("Bot or Bot.Connection is null", "TCP");
-                                    return "NOT_READY";
-                                }
-
-                                if (!botSource.Bot.Connection.Connected)
-                                {
-                                    LogUtil.LogInfo("Bot is not connected", "TCP");
-                                    return "NOT_READY";
-                                }
-                            }
-                            catch
-                            {
-                                LogUtil.LogInfo("Exception checking connection status", "TCP");
-                                return "NOT_READY";
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            LogUtil.LogInfo($"Exception while checking bot: {ex.Message}", "TCP");
-                            return "NOT_READY";
-                        }
-                    }
-
-                    return "READY"; // All checks passed, bot is ready
-
-                case "RefreshMap":
-                    foreach (var c in FLP_Bots.Controls.OfType<BotController>())
-                        c.SendCommand(BotControlCommand.RefreshMap, false);
-                    return "REFRESHED";
-
-                default:
-                    return $"Unknown command: {cmd}";
-            }
-        }
-
-        private void StopTcpListener()
-        {
-            try
-            {
-                // Delete port info file as an extra precaution
-                string portInfoPath = Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), $"SVRaidBot_{Environment.ProcessId}.port");
-                if (File.Exists(portInfoPath))
-                    File.Delete(portInfoPath);
-
-                _cts?.Cancel();
-                _tcpListener?.Stop();
-                _cts = null;
-                _tcpListener = null;
-            }
-            catch { }
         }
 
         private void LoadControls()
@@ -539,8 +234,7 @@ namespace SysBot.Pokemon.WinForms
                 trayIcon.ShowBalloonTip(2000, "S/V RaidBot", "Application minimized to system tray", ToolTipIcon.Info);
                 return;
             }
-
-            StopTcpListener();
+            this.StopWebServer();
 
             // Delete the port info file
             try

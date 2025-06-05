@@ -7,6 +7,7 @@
     <PackageId>SysBot.Pokemon.WinForms</PackageId>
     <Company>Project Pokémon</Company>
     <Authors>Kaphotics, Gengar</Authors>
+	  <LangVersion>13</LangVersion>
     <Product>SysBot.Pokemon.WinForms</Product>
     <Description>Nintendo Switch Pokémon Bot Manager</Description>
     <ApplicationIcon>icon.ico</ApplicationIcon>
