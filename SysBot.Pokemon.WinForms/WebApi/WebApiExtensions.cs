@@ -475,8 +475,13 @@ public static class WebApiExtensions
         {
             var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
             var exeDir = Path.GetDirectoryName(exePath) ?? Program.WorkingDirectory;
-            var portFile = Path.Combine(exeDir, $"SVRaidBot_{Environment.ProcessId}.port");
-            File.WriteAllText(portFile, _tcpPort.ToString());
+            
+            // Create both PokeBot and SVRaidBot port files for compatibility
+            var pokeBotPortFile = Path.Combine(exeDir, $"PokeBot_{Environment.ProcessId}.port");
+            var raidBotPortFile = Path.Combine(exeDir, $"SVRaidBot_{Environment.ProcessId}.port");
+            
+            File.WriteAllText(pokeBotPortFile, _tcpPort.ToString());
+            File.WriteAllText(raidBotPortFile, _tcpPort.ToString());
         }
         catch (Exception ex)
         {
@@ -490,10 +495,16 @@ public static class WebApiExtensions
         {
             var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
             var exeDir = Path.GetDirectoryName(exePath) ?? Program.WorkingDirectory;
-            var portFile = Path.Combine(exeDir, $"SVRaidBot_{Environment.ProcessId}.port");
+            
+            // Clean up both port files
+            var pokeBotPortFile = Path.Combine(exeDir, $"PokeBot_{Environment.ProcessId}.port");
+            var raidBotPortFile = Path.Combine(exeDir, $"SVRaidBot_{Environment.ProcessId}.port");
 
-            if (File.Exists(portFile))
-                File.Delete(portFile);
+            if (File.Exists(pokeBotPortFile))
+                File.Delete(pokeBotPortFile);
+                
+            if (File.Exists(raidBotPortFile))
+                File.Delete(raidBotPortFile);
         }
         catch (Exception ex)
         {
