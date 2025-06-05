@@ -928,6 +928,8 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                             const runningCount = instance.BotStatuses.filter(b => 
                                 b.Status.toUpperCase().includes('RUNNING') || 
                                 b.Status.toUpperCase().includes('ACTIVE') ||
+                                b.Status.toUpperCase().includes('ROTATINGRAIDBOT') ||
+                                b.Status.toUpperCase() === 'ROTATINGRAIDBOT' ||
                                 (!b.Status.toUpperCase().includes('IDLE') && 
                                  !b.Status.toUpperCase().includes('STOPPED') && 
                                  !b.Status.toUpperCase().includes('ERROR'))
@@ -1027,10 +1029,10 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                                         <button class=""action-menu-item danger"" onclick=""sendInstanceCommand(${instance.Port}, 'reboot')"">
                                             🔌 Reboot
                                         </button>
+                                        <div class=""action-menu-divider""></div>
                                         <button class=""action-menu-item"" onclick=""sendInstanceCommand(${instance.Port}, 'refreshmap')"">
                                             🗺️ Refresh Map
                                         </button>
-                                        <div class=""action-menu-divider""></div>
                                         <button class=""action-menu-item"" onclick=""sendInstanceCommand(${instance.Port}, 'screenon')"">
                                             💡 Screen On
                                         </button>
@@ -1084,6 +1086,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                 function getStatusColor(status) {
                     const upperStatus = status?.toUpperCase() || '';
                     if (upperStatus.includes('RUNNING') || upperStatus.includes('ACTIVE') || upperStatus === 'ONLINE' ||
+                        upperStatus.includes('ROTATINGRAIDBOT') || upperStatus === 'ROTATINGRAIDBOT' ||
                         (!upperStatus.includes('IDLE') && !upperStatus.includes('STOPPED') && !upperStatus.includes('ERROR') && !upperStatus.includes('UNKNOWN'))) {
                         return '#10b981';
                     } else if (upperStatus.includes('IDLE') || upperStatus.includes('PAUSED')) {
@@ -1100,6 +1103,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                 function getStatusClass(status) {
                     const upperStatus = status?.toUpperCase() || '';
                     if (upperStatus.includes('RUNNING') || upperStatus.includes('ACTIVE') || 
+                        upperStatus.includes('ROTATINGRAIDBOT') || upperStatus === 'ROTATINGRAIDBOT' ||
                         (!upperStatus.includes('IDLE') && !upperStatus.includes('STOPPED') && !upperStatus.includes('ERROR') && !upperStatus.includes('UNKNOWN'))) {
                         return 'running';
                     } else if (upperStatus.includes('IDLE')) {
@@ -1423,7 +1427,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         var mode = config?.Mode.ToString() ?? "Unknown";
         var name = "SVRaidBot";
 
-        // Get version from SVRaidBot.Version
+        // Get version from SVRaidBot helper
         var version = "Unknown";
         try
         {
@@ -1475,14 +1479,12 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
 
         try
         {
-            // Search for both PokeBot and SVRaidBot processes
-            var pokeBotProcesses = Process.GetProcessesByName("PokeBot")
-                .Where(p => p.Id != currentPid);
-            
-            var raidBotProcesses = Process.GetProcessesByName("SVRaidBot")
-                .Where(p => p.Id != currentPid);
-
-            var allProcesses = pokeBotProcesses.Concat(raidBotProcesses);
+            // Search for all supported bot process names - supports both PokeBot and SVRaidBot
+            var processNames = new[] { "PokeBot", "SVRaidBot", "SysBot.Pokemon.WinForms", "SysBot" };
+            var allProcesses = processNames
+                .SelectMany(name => Process.GetProcessesByName(name))
+                .Where(p => p.Id != currentPid)
+                .Distinct();
 
             foreach (var process in allProcesses)
             {

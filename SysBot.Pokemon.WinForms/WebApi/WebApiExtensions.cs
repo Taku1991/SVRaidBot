@@ -440,7 +440,7 @@ public static class WebApiExtensions
     {
         try
         {
-            // Get version from SVRaidBot.Version
+            // Get version from SVRaidBot helper
             var svRaidBotType = Type.GetType("SysBot.Pokemon.SV.BotRaid.Helpers.SVRaidBot, SysBot.Pokemon");
             if (svRaidBotType != null)
             {
@@ -466,7 +466,15 @@ public static class WebApiExtensions
         if (!string.IsNullOrEmpty(config?.Hub?.BotName))
             return config.Hub.BotName;
 
-        return "SVRaidBot";
+        return mode switch
+        {
+            "LGPE" => "LGPE",
+            "BDSP" => "BDSP",
+            "SWSH" => "SWSH",
+            "SV" => "SV",
+            "LA" => "LA",
+            _ => "SVRaidBot"
+        };
     }
 
     private static void CreatePortFile()
@@ -556,7 +564,6 @@ public static class WebApiExtensions
     {
         try
         {
-            _monitorCts?.Cancel();
             _cts?.Cancel();
             _tcp?.Stop();
             _server?.Dispose();

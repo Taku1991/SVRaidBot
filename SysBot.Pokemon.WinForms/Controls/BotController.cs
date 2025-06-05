@@ -50,6 +50,60 @@ namespace SysBot.Pokemon.WinForms
             }
         }
 
+        private void ExecuteScreenCommand(bool screenOn)
+        {
+            if (Runner == null)
+            {
+                LogUtil.LogError("Runner is null - cannot execute screen command", "BotController");
+                return;
+            }
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var bots = Runner.Bots;
+                    if (bots == null || bots.Count == 0)
+                    {
+                        LogUtil.LogError("No bots available to execute screen command", "BotController");
+                        return;
+                    }
+
+                    int successCount = 0;
+                    int totalCount = bots.Count;
+
+                    foreach (var botSource in bots)
+                    {
+                        try
+                        {
+                            var bot = botSource.Bot;
+                            if (bot?.Connection != null && bot.Connection.Connected)
+                            {
+                                var crlf = bot is SwitchRoutineExecutor<PokeBotState> { UseCRLF: true };
+                                await bot.Connection.SendAsync(SwitchCommand.SetScreen(screenOn ? ScreenState.On : ScreenState.Off, crlf), CancellationToken.None);
+                                successCount++;
+                                LogUtil.LogInfo($"Screen turned {(screenOn ? "ON" : "OFF")} for {bot.Connection.Name}", "BotController");
+                            }
+                            else
+                            {
+                                LogUtil.LogError($"Cannot send screen command - bot {bot?.Connection?.Name ?? "unknown"} is not connected", "BotController");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            LogUtil.LogError($"Failed to send screen command to bot: {ex.Message}", "BotController");
+                        }
+                    }
+
+                    LogUtil.LogInfo($"Screen command sent to {successCount} of {totalCount} bots", "BotController");
+                }
+                catch (Exception ex)
+                {
+                    LogUtil.LogError($"Failed to execute screen command for all bots: {ex.Message}", "BotController");
+                }
+            });
+        }
+
         private void EnableDoubleBuffering()
         {
             // Enable double buffering on child controls
@@ -143,7 +197,6 @@ namespace SysBot.Pokemon.WinForms
             if (Runner == null)
                 return;
 
-            bool runOnce = Runner.RunOnce;
             var bot = Runner.GetBot(State);
             if (bot is null)
                 return;
@@ -154,7 +207,7 @@ namespace SysBot.Pokemon.WinForms
                     .Replace("⏵ ", "").Replace("↻ ", "").Replace("⚡ ", "").Replace("🗺 ", "")
                     .Replace("💡 ", "").Replace("🌙 ", "").Replace("✕ ", "");
                 tsi.Enabled = Enum.TryParse(text, out BotControlCommand cmd)
-                    ? runOnce && cmd.IsUsable(bot.IsRunning, bot.IsPaused)
+                    ? cmd.IsUsable(bot.IsRunning, bot.IsPaused)
                     : !bot.IsRunning;
             }
         }
@@ -192,8 +245,18 @@ namespace SysBot.Pokemon.WinForms
                 return;
             }
 
+            // Check if bot is connected and actively running
+            if (!b.Bot.Connection.Connected)
+            {
+                targetStatusColor = Color.FromArgb(135, 206, 250); // Aqua
+                progressValue = 0.3f;
+                return;
+            }
+
             var cfg = bot.Config;
-            if (cfg.CurrentRoutineType == PokeRoutineType.Idle && cfg.NextRoutineType == PokeRoutineType.Idle)
+
+            // For SVRaidBot, check if paused
+            if (b.IsPaused)
             {
                 targetStatusColor = Color.FromArgb(254, 231, 92); // Yellow
                 progressValue = 0.5f;
@@ -266,8 +329,18 @@ namespace SysBot.Pokemon.WinForms
             {
                 try
                 {
-                    SysBot.Pokemon.SV.BotRaid.RotatingRaidBotSV.HasErrored = false;
-                    LogUtil.LogInfo("Reset HasErrored flag", "BotController");
+                    // Try to reset HasErrored flag if RotatingRaidBotSV exists
+                    var raidBotType = Type.GetType("SysBot.Pokemon.SV.BotRaid.RotatingRaidBotSV, SysBot.Pokemon");
+                    if (raidBotType != null)
+                    {
+                        var hasErroredProp = raidBotType.GetProperty("HasErrored",
+                            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                        if (hasErroredProp != null && hasErroredProp.CanWrite)
+                        {
+                            hasErroredProp.SetValue(null, false);
+                            LogUtil.LogInfo("Reset HasErrored flag", "BotController");
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -282,9 +355,15 @@ namespace SysBot.Pokemon.WinForms
                 case BotControlCommand.Stop: bot.Stop(); break;
                 case BotControlCommand.Resume: bot.Resume(); break;
                 case BotControlCommand.RebootAndStop: bot.RebootAndStop(); break;
-                case BotControlCommand.RefreshMap: bot.RefreshMap(); break;
-                case BotControlCommand.ScreenOnAll: ExecuteScreenCommand(true); break;
-                case BotControlCommand.ScreenOffAll: ExecuteScreenCommand(false); break;
+                case BotControlCommand.RefreshMap:
+                    bot.RefreshMap();
+                    break;
+                case BotControlCommand.ScreenOnAll:
+                    ExecuteScreenCommand(true);
+                    break;
+                case BotControlCommand.ScreenOffAll:
+                    ExecuteScreenCommand(false);
+                    break;
                 case BotControlCommand.Restart:
                     {
                         var prompt = WinFormsUtil.Prompt(MessageBoxButtons.YesNo, "Are you sure you want to restart the connection?");
@@ -301,60 +380,6 @@ namespace SysBot.Pokemon.WinForms
             }
         }
 
-        private void ExecuteScreenCommand(bool screenOn)
-        {
-            if (Runner == null)
-            {
-                LogUtil.LogError("Runner is null - cannot execute screen command", "BotController");
-                return;
-            }
-
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var bots = Runner.Bots;
-                    if (bots == null || bots.Count == 0)
-                    {
-                        LogUtil.LogError("No bots available to execute screen command", "BotController");
-                        return;
-                    }
-
-                    int successCount = 0;
-                    int totalCount = bots.Count;
-
-                    foreach (var botSource in bots)
-                    {
-                        try
-                        {
-                            var bot = botSource.Bot;
-                            if (bot?.Connection != null && bot.Connection.Connected)
-                            {
-                                var crlf = bot is SwitchRoutineExecutor<PokeBotState> { UseCRLF: true };
-                                await bot.Connection.SendAsync(SwitchCommand.SetScreen(screenOn ? ScreenState.On : ScreenState.Off, crlf), CancellationToken.None);
-                                successCount++;
-                                LogUtil.LogInfo($"Screen turned {(screenOn ? "ON" : "OFF")} for {bot.Connection.Name}", "BotController");
-                            }
-                            else
-                            {
-                                LogUtil.LogError($"Cannot send screen command - bot {bot?.Connection?.Name ?? "unknown"} is not connected", "BotController");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            LogUtil.LogError($"Failed to send screen command to bot: {ex.Message}", "BotController");
-                        }
-                    }
-
-                    LogUtil.LogInfo($"Screen command sent to {successCount} of {totalCount} bots", "BotController");
-                }
-                catch (Exception ex)
-                {
-                    LogUtil.LogError($"Failed to execute screen command for all bots: {ex.Message}", "BotController");
-                }
-            });
-        }
-
         public string ReadBotState()
         {
             try
@@ -367,7 +392,7 @@ namespace SysBot.Pokemon.WinForms
                 if (bot == null)
                     return "ERROR";
 
-                // Check if bot is stopped first - this is the key fix
+                // Check if bot is stopped first
                 if (!botSource.IsRunning)
                     return "STOPPED";
 
@@ -376,10 +401,7 @@ namespace SysBot.Pokemon.WinForms
 
                 if (botSource.IsPaused)
                 {
-                    if (bot.Config?.CurrentRoutineType != PokeRoutineType.Idle)
-                        return "IDLING";
-                    else
-                        return "IDLE";
+                    return "IDLE";
                 }
 
                 if (botSource.IsRunning && !bot.Connection.Connected)
@@ -389,14 +411,27 @@ namespace SysBot.Pokemon.WinForms
                 if (cfg == null)
                     return "UNKNOWN";
 
-                if (cfg.CurrentRoutineType == PokeRoutineType.Idle)
-                    return "IDLE";
-
-                // Only return the routine type if the bot is actually running
+                // For SVRaidBot, when running it should show the actual routine
+                // Check if bot is actively running and connected
                 if (botSource.IsRunning && bot.Connection.Connected)
-                    return cfg.CurrentRoutineType.ToString();
+                {
+                    // If InitialRoutine is RotatingRaidBot, show that when running
+                    if (State.InitialRoutine == PokeRoutineType.RotatingRaidBot)
+                        return "RotatingRaidBot";
 
-                return "UNKNOWN";
+                    // Otherwise return current routine type
+                    if (cfg.CurrentRoutineType != PokeRoutineType.Idle)
+                        return cfg.CurrentRoutineType.ToString();
+
+                    // If current routine is Idle but bot is running, check NextRoutineType
+                    if (cfg.NextRoutineType != PokeRoutineType.Idle)
+                        return cfg.NextRoutineType.ToString();
+
+                    // Default to showing the initial routine if running
+                    return State.InitialRoutine.ToString();
+                }
+
+                return "IDLE";
             }
             catch (Exception ex)
             {
@@ -808,9 +843,9 @@ namespace SysBot.Pokemon.WinForms
                 BotControlCommand.Resume => paused,
                 BotControlCommand.Restart => true,
                 BotControlCommand.RebootAndStop => true,
-                BotControlCommand.RefreshMap => true,
-                BotControlCommand.ScreenOnAll => running,
-                BotControlCommand.ScreenOffAll => running,
+                BotControlCommand.RefreshMap => running, // Only available when running
+                BotControlCommand.ScreenOnAll => running, // Only when running
+                BotControlCommand.ScreenOffAll => running, // Only when running
                 _ => false,
             };
         }

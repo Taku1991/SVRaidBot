@@ -1389,50 +1389,15 @@ namespace SysBot.Pokemon.SV.BotRaid
                     return false;
                 }
 
-                // Determine which region the raid is in
-                TeraRaidMapParent region;
-                int indexWithinRegion;
+                // Use the memory manager to read the seed at the known index
+                uint seed = await _raidMemoryManager.ReadSeedAtIndex(_seedIndexToReplace, token);
 
-                if (_seedIndexToReplace < 69)
-                {
-                    // Paldea raid (indices 0-68)
-                    region = TeraRaidMapParent.Paldea;
-                    indexWithinRegion = _seedIndexToReplace;
-                }
-                else if (_seedIndexToReplace < 95)
-                {
-                    // Kitakami raid (indices 69-94)
-                    region = TeraRaidMapParent.Kitakami;
-                    indexWithinRegion = _seedIndexToReplace - 69;
-                }
-                else
-                {
-                    // Blueberry raid (indices 95+)
-                    region = TeraRaidMapParent.Blueberry;
-                    indexWithinRegion = _seedIndexToReplace - 95;
-                }
-
-                // Get the raid data for the region
-                byte[] raidData = await ReadRaidsForRegion(region, token);
-
-                // Verify the data has enough bytes for this index
-                int raidOffset = indexWithinRegion * TeraRaidDetail.SIZE;
-                if (raidOffset + TeraRaidDetail.SIZE > raidData.Length)
-                {
-                    Log($"Cannot determine win/loss.");
-                    return false;
-                }
-
-                // Create a TeraRaidDetail object from the data
-                Memory<byte> raidMemory = new(raidData, raidOffset, TeraRaidDetail.SIZE);
-                var raidDetail = new TeraRaidDetail(raidMemory);
-
-                // A raid is won if IsEnabled is false
-                return !raidDetail.IsEnabled;
+                // A seed of 0 means the raid was completed (won)
+                return seed == 0;
             }
             catch (Exception ex)
             {
-                Log($"Error in win detection: {ex.Message}. Assuming raid was lost.");
+                Log($"Error checking raid completion: {ex.Message}");
                 return false;
             }
         }

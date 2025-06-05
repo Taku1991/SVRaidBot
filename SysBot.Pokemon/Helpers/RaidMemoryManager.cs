@@ -40,6 +40,43 @@ public class RaidMemoryManager(ISwitchConnectionAsync connection, ulong raidBloc
     }
 
     /// <summary>
+    /// Reads the seed value at a specific raid index.
+    /// </summary>
+    /// <param name="index">The global raid index</param>
+    /// <param name="token">Cancellation token</param>
+    /// <returns>The seed value at the specified index, or 0 if the raid is completed</returns>
+    /// <summary>
+    /// Reads the seed value at a specific raid index.
+    /// </summary>
+    /// <param name="index">The global raid index</param>
+    /// <param name="token">Cancellation token</param>
+    /// <returns>The seed value at the specified index, or 0 if the raid is completed</returns>
+    public async Task<uint> ReadSeedAtIndex(int index, CancellationToken token)
+    {
+        if (index < 69)
+        {
+            // Paldea
+            var offset = (ulong)(0x20 + index * 0x20);
+            var data = await _connection.ReadBytesAbsoluteAsync(_raidBlockPointerBase + offset, 4, token).ConfigureAwait(false);
+            return BitConverter.ToUInt32(data, 0);
+        }
+        else if (index < 93)
+        {
+            // Kitakami
+            var offset = (ulong)((index - 69) * 0x20);
+            var data = await _connection.ReadBytesAbsoluteAsync(_raidBlockPointerKitakami + 0x10 + offset, 4, token).ConfigureAwait(false);
+            return BitConverter.ToUInt32(data, 0);
+        }
+        else
+        {
+            // Blueberry
+            var offset = (ulong)((index - 93) * 0x20);
+            var data = await _connection.ReadBytesAbsoluteAsync(_raidBlockPointerBlueberry + 0x10 + offset, 4, token).ConfigureAwait(false);
+            return BitConverter.ToUInt32(data, 0);
+        }
+    }
+
+    /// <summary>
     /// Injects a raid seed and crystal type at the specified index in memory.
     /// </summary>
     /// <param name="index">Index location to inject the seed</param>
