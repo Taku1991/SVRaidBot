@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using SysBot.Base;
+using SysBot.Pokemon.SV.BotRaid.Helpers;
 using SysBot.Pokemon.WinForms.WebApi;
 
 namespace SysBot.Pokemon.WinForms;
@@ -255,8 +256,35 @@ public static class WebApiExtensions
             "STATUS" => GetBotStatuses(botId),
             "ISREADY" => CheckReady(),
             "INFO" => GetInstanceInfo(),
+            "VERSION" => SVRaidBot.Version,
+            "UPDATE" => TriggerUpdate(),
             _ => $"ERROR: Unknown command '{cmd}'"
         };
+    }
+
+    private static string TriggerUpdate()
+    {
+        try
+        {
+            if (_main == null)
+                return "ERROR: Main form not initialized";
+
+            _main.BeginInvoke((MethodInvoker)(async () =>
+            {
+                var (updateAvailable, _, newVersion) = await UpdateChecker.CheckForUpdatesAsync(false);
+                if (updateAvailable)
+                {
+                    var updateForm = new UpdateForm(false, newVersion, true);
+                    updateForm.PerformUpdate();
+                }
+            }));
+
+            return "OK: Update triggered";
+        }
+        catch (Exception ex)
+        {
+            return $"ERROR: {ex.Message}";
+        }
     }
 
     private static string ExecuteGlobalCommand(BotControlCommand command)
@@ -438,27 +466,7 @@ public static class WebApiExtensions
 
     private static string GetVersion()
     {
-        try
-        {
-            // Get version from SVRaidBot helper
-            var svRaidBotType = Type.GetType("SysBot.Pokemon.SV.BotRaid.Helpers.SVRaidBot, SysBot.Pokemon");
-            if (svRaidBotType != null)
-            {
-                var versionField = svRaidBotType.GetField("Version",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                if (versionField != null)
-                {
-                    return versionField.GetValue(null)?.ToString() ?? "Unknown";
-                }
-            }
-
-            // Fallback to assembly version
-            return _main!.GetType().Assembly.GetName().Version?.ToString() ?? "Unknown";
-        }
-        catch
-        {
-            return "Unknown";
-        }
+        return SVRaidBot.Version;
     }
 
     private static string GetInstanceName(ProgramConfig? config, string mode)
@@ -534,7 +542,7 @@ public static class WebApiExtensions
     {
         try
         {
-            using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(1) };
+            using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMilliseconds(200) };
             var response = client.GetAsync($"http://localhost:{port}/api/bot/instances").Result;
             return response.IsSuccessStatusCode;
         }
@@ -545,7 +553,7 @@ public static class WebApiExtensions
             {
                 using var tcpClient = new TcpClient();
                 var result = tcpClient.BeginConnect("127.0.0.1", port, null, null);
-                var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(1));
+                var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(200));
                 if (success)
                 {
                     tcpClient.EndConnect(result);
