@@ -3,7 +3,7 @@
     public static class SVRaidBot
     {
 
-        public const string Version = "v1.7.5";
+        public const string Version = "v1.7.6";
         public const string Repo = "https://github.com/Taku1991/SVRaidBot";
 
 

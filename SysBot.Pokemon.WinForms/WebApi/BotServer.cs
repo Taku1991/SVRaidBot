@@ -305,13 +305,14 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
 
         try
         {
-            var processNames = new[] { "SVRaidBot", "SysBot.Pokemon.WinForms", "SysBot" };
+            // Search for all supported bot process names - supports both PokeBot and SVRaidBot
+            var processNames = new[] { "PokeBot", "SVRaidBot", "SysBot.Pokemon.WinForms", "SysBot" };
             var processes = processNames
                 .SelectMany(name => Process.GetProcessesByName(name))
                 .Where(p => p.Id != currentPid)
                 .Distinct();
 
-            foreach (var process in allProcesses)
+            foreach (var process in processes)
             {
                 var instance = TryCreateInstance(process);
                 if (instance != null)
