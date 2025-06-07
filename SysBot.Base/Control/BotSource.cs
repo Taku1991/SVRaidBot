@@ -140,7 +140,20 @@ namespace SysBot.Base
 
         public void Resume()
         {
-            Start();
+            Task.Run(async () =>
+            {
+                if (IsPaused)
+                {
+                    Stop();
+                    int waitCount = 0;
+                    while ((IsStopping || IsRunning) && waitCount < 50)
+                    {
+                        await Task.Delay(100).ConfigureAwait(false);
+                        waitCount++;
+                    }
+                }
+                Start();
+            });
         }
     }
 }

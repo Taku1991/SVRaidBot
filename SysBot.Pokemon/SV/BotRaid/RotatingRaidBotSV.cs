@@ -97,6 +97,7 @@ namespace SysBot.Pokemon.SV.BotRaid
         private bool _shouldRefreshMap;
         public static bool HasErrored { get; set; }
         private bool _isRecoveringFromReboot;
+        private volatile bool _isPaused = false;
 
         /// <summary>
         /// Main execution loop for the raid bot
@@ -104,6 +105,9 @@ namespace SysBot.Pokemon.SV.BotRaid
         /// <param name="token">Cancellation token</param>
         public override async Task MainLoop(CancellationToken token)
         {
+            // Clear pause state when starting
+            _isPaused = false;
+
             if (_settings.RaidSettings.GenerateRaidsFromFile)
             {
                 await Task.Run(() => GenerateSeedsFromFile(), token).ConfigureAwait(false);
@@ -142,6 +146,12 @@ namespace SysBot.Pokemon.SV.BotRaid
 
             Log($"Ending {nameof(RotatingRaidBotSV)} loop.");
             await HardStop().ConfigureAwait(false);
+        }
+
+        public override void SoftStop()
+        {
+            _isPaused = true;
+            base.SoftStop();
         }
 
         /// <summary>
@@ -491,6 +501,7 @@ namespace SysBot.Pokemon.SV.BotRaid
         /// <param name="token">Cancellation token</param>
         private async Task InnerLoop(CancellationToken token)
         {
+
             try
             {
                 bool partyReady;
@@ -503,6 +514,24 @@ namespace SysBot.Pokemon.SV.BotRaid
                 {
                     try
                     {
+                        // CHECK IF BOT IS PAUSED
+                        if (_isPaused)
+                        {
+                            Log("Bot is paused. Waiting for resume command...");
+
+                            // Wait while paused
+                            while (_isPaused && !token.IsCancellationRequested)
+                            {
+                                await Task.Delay(1000, token).ConfigureAwait(false);
+                            }
+
+                            if (!token.IsCancellationRequested && !_isPaused)
+                            {
+                                Log("Bot resumed. Continuing raid operations...");
+                            }
+
+                            continue;
+                        }
                         try
                         {
                             await InitializeSessionOffsets(token).ConfigureAwait(false);
@@ -1961,6 +1990,11 @@ namespace SysBot.Pokemon.SV.BotRaid
         {
             try
             {
+                if (_isPaused)
+                {
+                    Log("Bot is paused. Skipping raid preparation.");
+                    return 0;
+                }
                 (bool valid, ulong freshOffset) = await ValidatePointerAll(Offsets.OverworldPointer, token).ConfigureAwait(false);
                 if (valid)
                 {
@@ -3674,6 +3708,11 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
         /// </summary>
         public async Task StartGameRaid(PokeRaidHubConfig config, CancellationToken token)
         {
+            if (_isPaused)
+            {
+                Log("Bot is paused. Skipping game start.");
+                return;
+            }
             // First, check if the time rollback feature is enabled
             if (_settings.RaidSettings.EnableTimeRollBack && DateTime.Now - _timeForRollBackCheck >= TimeSpan.FromHours(5))
             {
