@@ -299,7 +299,13 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         var config = GetConfig();
         var controllers = GetBotControllers();
 
-        var mode = config?.Mode.ToString() ?? "Unknown";
+        var mode = "Unknown";
+        try
+        {
+            var modeProp = config?.GetType().GetProperty("Mode");
+            mode = modeProp?.GetValue(config)?.ToString() ?? "Unknown";
+        }
+        catch { }
         var name = "SVRaidBot";
 
         var version = "Unknown";

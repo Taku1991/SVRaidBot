@@ -5,8 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using SysBot.Base;
-using SysBot.Pokemon.Helpers;
+// using SysBot.Base;
+// using SysBot.Pokemon.Helpers;
 
 namespace SysBot.Pokemon.WinForms.WebApi;
 
@@ -66,7 +66,7 @@ public static class UpdateManager
             return result;
         }
 
-        LogUtil.LogInfo($"Idling all bots across {instancesNeedingUpdate.Count} instances before updates...", "UpdateManager");
+        Console.WriteLine($"UpdateManager: Idling all bots across {instancesNeedingUpdate.Count} instances before updates...");
 
         foreach (var (processId, port, version) in instancesNeedingUpdate)
         {
@@ -93,12 +93,12 @@ public static class UpdateManager
                 var idleResponse = BotServer.QueryRemote(port, "IDLEALL");
                 if (idleResponse.StartsWith("ERROR"))
                 {
-                    LogUtil.LogError($"Failed to send idle command to port {port}", "UpdateManager");
+                    Console.WriteLine($"UpdateManager: Failed to send idle command to port {port}");
                 }
             }
         }
 
-        LogUtil.LogInfo("Waiting for all bots to finish current operations and go idle...", "UpdateManager");
+        Console.WriteLine("UpdateManager: Waiting for all bots to finish current operations and go idle...");
 
         // Pass ALL instances to check, not just ones needing update
         var allInstances = instances.Select(i => (i.ProcessId, i.Port, i.Version)).ToList();
@@ -150,17 +150,17 @@ public static class UpdateManager
 
                     instanceResult.UpdateStarted = true;
                     result.UpdatesStarted++;
-                    LogUtil.LogInfo("Master instance update triggered", "UpdateManager");
+                    Console.WriteLine("UpdateManager: Master instance update triggered");
                 }
                 else
                 {
-                    LogUtil.LogInfo($"Triggering update for instance on port {port}...", "UpdateManager");
+                    Console.WriteLine($"UpdateManager: Triggering update for instance on port {port}...");
                     var updateResponse = BotServer.QueryRemote(port, "UPDATE");
                     if (!updateResponse.StartsWith("ERROR"))
                     {
                         instanceResult.UpdateStarted = true;
                         result.UpdatesStarted++;
-                        LogUtil.LogInfo($"Update triggered for instance on port {port}", "UpdateManager");
+                        Console.WriteLine($"UpdateManager: Update triggered for instance on port {port}");
                         await Task.Delay(5000);
                     }
                     else
@@ -174,7 +174,7 @@ public static class UpdateManager
             {
                 instanceResult.Error = ex.Message;
                 result.UpdatesFailed++;
-                LogUtil.LogError($"Error updating instance on port {port}: {ex.Message}", "UpdateManager");
+                Console.WriteLine($"UpdateManager: Error updating instance on port {port}: {ex.Message}");
             }
 
             result.InstanceResults.Add(instanceResult);
@@ -217,7 +217,7 @@ public static class UpdateManager
             return result;
         }
 
-        LogUtil.LogInfo($"Starting idle process for {instancesNeedingUpdate.Count} instances that need updates...", "UpdateManager");
+        Console.WriteLine($"UpdateManager: Starting idle process for {instancesNeedingUpdate.Count} instances that need updates...");
 
         foreach (var (processId, port, version) in instancesNeedingUpdate)
         {
@@ -264,7 +264,7 @@ public static class UpdateManager
             {
                 instanceResult.Error = ex.Message;
                 result.UpdatesFailed++;
-                LogUtil.LogError($"Error idling instance on port {port}: {ex.Message}", "UpdateManager");
+                Console.WriteLine($"UpdateManager: Error idling instance on port {port}: {ex.Message}");
             }
 
             result.InstanceResults.Add(instanceResult);
@@ -303,7 +303,7 @@ public static class UpdateManager
             return result;
         }
 
-        LogUtil.LogInfo("Waiting for all instances to be idle before proceeding with updates...", "UpdateManager");
+        Console.WriteLine("UpdateManager: Waiting for all instances to be idle before proceeding with updates...");
 
         var allInstances = instances.Select(i => (i.ProcessId, i.Port, i.Version)).ToList();
         var allIdle = await WaitForAllInstancesToBeIdle(mainForm, allInstances, 300);
@@ -354,17 +354,17 @@ public static class UpdateManager
 
                     instanceResult.UpdateStarted = true;
                     result.UpdatesStarted++;
-                    LogUtil.LogInfo("Master instance update triggered", "UpdateManager");
+                    Console.WriteLine("UpdateManager: Master instance update triggered");
                 }
                 else
                 {
-                    LogUtil.LogInfo($"Triggering update for instance on port {port}...", "UpdateManager");
+                    Console.WriteLine($"UpdateManager: Triggering update for instance on port {port}...");
                     var updateResponse = BotServer.QueryRemote(port, "UPDATE");
                     if (!updateResponse.StartsWith("ERROR"))
                     {
                         instanceResult.UpdateStarted = true;
                         result.UpdatesStarted++;
-                        LogUtil.LogInfo($"Update triggered for instance on port {port}", "UpdateManager");
+                        Console.WriteLine($"UpdateManager: Update triggered for instance on port {port}");
                         await Task.Delay(5000);
                     }
                     else
@@ -378,7 +378,7 @@ public static class UpdateManager
             {
                 instanceResult.Error = ex.Message;
                 result.UpdatesFailed++;
-                LogUtil.LogError($"Error updating instance on port {port}: {ex.Message}", "UpdateManager");
+                Console.WriteLine($"UpdateManager: Error updating instance on port {port}: {ex.Message}");
             }
 
             result.InstanceResults.Add(instanceResult);
@@ -440,14 +440,14 @@ public static class UpdateManager
 
             if (allIdle)
             {
-                LogUtil.LogInfo("All instances are idle, ready for updates", "UpdateManager");
+                Console.WriteLine("UpdateManager: All instances are idle, ready for updates");
                 return true;
             }
 
             await Task.Delay(5000);
         }
 
-        LogUtil.LogError($"Timeout waiting for all instances to idle after {timeoutSeconds} seconds", "UpdateManager");
+        Console.WriteLine($"UpdateManager: Timeout waiting for all instances to idle after {timeoutSeconds} seconds");
         return false;
     }
 
@@ -457,33 +457,56 @@ public static class UpdateManager
 
         instances.Add((Environment.ProcessId, currentPort, GetCurrentVersion()));
 
-        var processes = Process.GetProcessesByName("SysBot.Pokemon.WinForms");
-        foreach (var process in processes)
+        var processNames = new[] { "PokeBot", "SVRaidBot", "SysBot.Pokemon.WinForms", "SysBot" };
+        foreach (var processName in processNames)
         {
-            if (process.Id == Environment.ProcessId)
-                continue;
-
             try
             {
-                for (int port = 8080; port <= 8090; port++)
-                {
-                    if (port == currentPort) continue;
+                var processes = Process.GetProcessesByName(processName)
+                    .Where(p => p.Id != Environment.ProcessId);
 
-                    if (IsPortOpen(port))
+                foreach (var process in processes)
+                {
+                    try
                     {
+                        var exePath = process.MainModule?.FileName;
+                        if (string.IsNullOrEmpty(exePath))
+                            continue;
+
+                        var exeDir = Path.GetDirectoryName(exePath)!;
+                        
+                        // Try both PokeBot and SVRaidBot port file formats
+                        var pokeBotPortFile = Path.Combine(exeDir, $"PokeBot_{process.Id}.port");
+                        var raidBotPortFile = Path.Combine(exeDir, $"SVRaidBot_{process.Id}.port");
+                        
+                        string? portFile = null;
+                        if (File.Exists(pokeBotPortFile))
+                            portFile = pokeBotPortFile;
+                        else if (File.Exists(raidBotPortFile))
+                            portFile = raidBotPortFile;
+                        
+                        if (portFile == null)
+                            continue;
+
+                        var portText = File.ReadAllText(portFile).Trim();
+                        if (portText.StartsWith("ERROR:") || !int.TryParse(portText, out var port))
+                            continue;
+
+                        if (!IsPortOpen(port))
+                            continue;
+
                         var versionResponse = BotServer.QueryRemote(port, "VERSION");
-                        if (!versionResponse.StartsWith("ERROR"))
-                        {
-                            instances.Add((process.Id, port, versionResponse.Trim()));
-                            break;
-                        }
+                        var version = versionResponse.StartsWith("ERROR") ? "Unknown" : versionResponse.Trim();
+
+                        instances.Add((process.Id, port, version));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"UpdateManager: Error checking process {process.Id}: {ex.Message}");
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                LogUtil.LogError($"Error checking process {process.Id}: {ex.Message}", "UpdateManager");
-            }
+            catch { }
         }
 
         return instances;
@@ -491,7 +514,31 @@ public static class UpdateManager
 
     private static string GetCurrentVersion()
     {
-        return UpdateChecker.GetCurrentVersion() ?? "Unknown";
+        try
+        {
+            // Try to get SVRaidBot version first
+            var svRaidBotType = Type.GetType("SysBot.Pokemon.SV.BotRaid.Helpers.SVRaidBot, SysBot.Pokemon");
+            if (svRaidBotType != null)
+            {
+                var versionField = svRaidBotType.GetField("Version",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (versionField != null)
+                {
+                    return versionField.GetValue(null)?.ToString() ?? "Unknown";
+                }
+            }
+        }
+        catch { }
+        
+        // Fallback to assembly version
+        try
+        {
+            return System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "Unknown";
+        }
+        catch
+        {
+            return "Unknown";
+        }
     }
 
     private static bool IsPortOpen(int port)
