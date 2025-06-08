@@ -477,12 +477,16 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                 return RunLocalCommand(commandRequest.Command);
             }
 
-            var tcpCommand = $"{commandRequest.Command}All".ToUpper();
-            var result = QueryRemote(port, tcpCommand);
+            // Improved command handling - support both individual and all commands
+            var tcpCommand = string.IsNullOrEmpty(commandRequest.BotId) 
+                ? $"{commandRequest.Command}All".ToUpper()
+                : $"{commandRequest.Command}Bot{commandRequest.BotId}".ToUpper();
+            
+            var result = QueryRemoteWithRetry(port, tcpCommand, maxRetries: 3);
 
             return JsonSerializer.Serialize(new CommandResponse
             {
-                Success = !result.StartsWith("ERROR"),
+                Success = !result.StartsWith("ERROR") && !result.StartsWith("Failed"),
                 Message = result,
                 Port = port,
                 Command = commandRequest.Command,
@@ -508,6 +512,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
 
             var results = new List<CommandResponse>();
 
+            // Execute locally first
             var localResult = JsonSerializer.Deserialize<CommandResponse>(RunLocalCommand(commandRequest.Command));
             if (localResult != null)
             {
@@ -515,22 +520,33 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                 results.Add(localResult);
             }
 
+            // Execute on remote instances
             var remoteInstances = ScanRemoteInstances().Where(i => i.IsOnline);
             foreach (var instance in remoteInstances)
             {
                 try
                 {
-                    var result = QueryRemote(instance.Port, $"{commandRequest.Command}All".ToUpper());
+                    var result = QueryRemoteWithRetry(instance.Port, $"{commandRequest.Command}All".ToUpper(), maxRetries: 2);
                     results.Add(new CommandResponse
                     {
-                        Success = !result.StartsWith("ERROR"),
+                        Success = !result.StartsWith("ERROR") && !result.StartsWith("Failed"),
                         Message = result,
                         Port = instance.Port,
                         Command = commandRequest.Command,
                         InstanceName = instance.Name
                     });
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    results.Add(new CommandResponse
+                    {
+                        Success = false,
+                        Message = $"ERROR: {ex.Message}",
+                        Port = instance.Port,
+                        Command = commandRequest.Command,
+                        InstanceName = instance.Name
+                    });
+                }
             }
 
             return JsonSerializer.Serialize(new BatchCommandResponse
@@ -618,6 +634,46 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         }
     }
 
+    public static string QueryRemoteWithRetry(int port, string command, int maxRetries = 3)
+    {
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                using var client = new TcpClient();
+                client.ReceiveTimeout = 5000; // 5 second timeout
+                client.SendTimeout = 5000;
+                client.Connect("127.0.0.1", port);
+
+                using var stream = client.GetStream();
+                using var writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
+                using var reader = new StreamReader(stream, Encoding.UTF8);
+
+                writer.WriteLine(command);
+                var response = reader.ReadLine();
+                
+                if (!string.IsNullOrEmpty(response))
+                {
+                    return response;
+                }
+                
+                return "No response from bot instance";
+            }
+            catch (Exception ex)
+            {
+                if (attempt == maxRetries)
+                {
+                    return $"ERROR: Failed to connect after {maxRetries} attempts - {ex.Message}";
+                }
+                
+                // Wait before retry (exponential backoff)
+                Thread.Sleep(attempt * 1000);
+            }
+        }
+        
+        return "ERROR: All connection attempts failed";
+    }
+
     private List<BotController> GetBotControllers()
     {
         var flpBotsField = _mainForm.GetType().GetField("FLP_Bots",
@@ -631,16 +687,26 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         return new List<BotController>();
     }
 
-    private ProgramConfig? GetConfig()
+    private object? GetConfig()
     {
         var configProp = _mainForm.GetType().GetProperty("Config",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        return configProp?.GetValue(_mainForm) as ProgramConfig;
+        return configProp?.GetValue(_mainForm);
     }
 
-    private static string GetBotName(PokeBotState state, ProgramConfig? config)
+    private static string GetBotName(object state, object? config)
     {
-        return state.Connection.IP;
+        try
+        {
+            var connectionProp = state.GetType().GetProperty("Connection");
+            var connection = connectionProp?.GetValue(state);
+            var ipProp = connection?.GetType().GetProperty("IP");
+            return ipProp?.GetValue(connection)?.ToString() ?? "Unknown";
+        }
+        catch
+        {
+            return "Unknown";
+        }
     }
 
     private static string CreateErrorResponse(string message)

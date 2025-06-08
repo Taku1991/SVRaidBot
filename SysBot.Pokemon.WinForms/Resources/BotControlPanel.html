@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=5.0">
-    <title>SVRaidBot Control Center</title>
+    <title>Bot Control Center</title>
     <style>
         :root {
             --bg-primary: #0a0e27;
@@ -761,7 +761,7 @@
         <header class="header">
             <div class="header-content">
                 <div class="logo">
-                    <h1>SVRaidBot Control Center</h1>
+                    <h1>Universal Bot Control Center</h1>
                     <div class="status-indicator"></div>
                 </div>
                 <div class="refresh-status">
@@ -780,7 +780,7 @@
                     <button class="btn" onclick="sendGlobalCommand('resume')">⏯️ Resume All</button>
                     <button class="btn" onclick="sendGlobalCommand('restart')">🔄 Restart All</button>
                     <button class="btn" onclick="sendGlobalCommand('reboot')">🔌 Reboot All</button>
-                    <button class="btn btn-primary" onclick="sendGlobalCommand('refreshmap')">🗺️ Refresh Map</button>
+                    <button class="btn btn-primary" onclick="sendGlobalCommand('refreshmap')" id="refreshmap-btn" style="display: none;">🗺️ Refresh Map</button>
                     <button class="btn" onclick="sendGlobalCommand('screenon')">💡 Screen On</button>
                     <button class="btn" onclick="sendGlobalCommand('screenoff')">🌙 Screen Off</button>
                     <button class="btn btn-primary" onclick="updateAllInstances()">⬆️ Update All</button>
@@ -811,6 +811,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             refreshInstances();
             startAutoRefresh();
+            detectBotType();
 
             // Close menus when clicking outside
             document.addEventListener('click', (e) => {
@@ -851,6 +852,32 @@
         window.addEventListener('beforeunload', () => {
             if (refreshInterval) clearInterval(refreshInterval);
         });
+
+        async function detectBotType() {
+            try {
+                const response = await fetch(`${API_BASE}/instances`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const hasRaidBot = data.Instances?.some(instance => 
+                        instance.Mode?.toLowerCase().includes('raid') || 
+                        instance.Name?.toLowerCase().includes('raid') ||
+                        instance.Version?.toLowerCase().includes('raid')
+                    );
+                    
+                    // Show refresh map buttons if raid bot detected
+                    if (hasRaidBot) {
+                        const refreshMapBtn = document.getElementById('refreshmap-btn');
+                        if (refreshMapBtn) refreshMapBtn.style.display = 'block';
+                        
+                        document.querySelectorAll('.refreshmap-item').forEach(btn => {
+                            btn.style.display = 'block';
+                        });
+                    }
+                }
+            } catch (error) {
+                console.log('Bot type detection failed, using default layout');
+            }
+        }
 
 
         async function updateAllInstances() {
@@ -944,7 +971,7 @@
                 }
             } catch (error) {
                 console.error('Error fetching instances:', error);
-                showError('Failed to load bot instances. Make sure the bot is running.');
+                showError('Failed to load bot instances. Make sure at least one bot instance is running.');
             }
         }
 
@@ -952,7 +979,7 @@
             const container = document.getElementById('instances-container');
 
             if (instances.length === 0) {
-                container.innerHTML = '<div class="error-message">⚠️ No bot instances found. Make sure at least one SVRaidBot is running.</div>';
+                container.innerHTML = '<div class="error-message">⚠️ No bot instances found. Make sure at least one bot instance is running.</div>';
                 return;
             }
 
@@ -1071,7 +1098,7 @@
                                     🔌 Reboot
                                 </button>
                                 <div class="action-menu-divider"></div>
-                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'refreshmap')">
+                                <button class="action-menu-item refreshmap-item" onclick="sendInstanceCommand(${instance.Port}, 'refreshmap')" style="display: none;">
                                     🗺️ Refresh Map
                                 </button>
                                 <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenon')">
