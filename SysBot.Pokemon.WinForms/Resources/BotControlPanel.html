@@ -825,21 +825,33 @@
 
             // Track mouse interaction
             document.addEventListener('mouseenter', (e) => {
-                if (e.target.closest('.instance-card')) {
-                    isInteracting = true;
+                try {
+                    if (e.target && typeof e.target.closest === 'function' && e.target.closest('.instance-card')) {
+                        isInteracting = true;
+                    }
+                } catch (err) {
+                    // Ignore errors from non-DOM targets
                 }
             }, true);
 
             document.addEventListener('mouseleave', (e) => {
-                if (e.target.closest('.instance-card')) {
-                    isInteracting = false;
+                try {
+                    if (e.target && typeof e.target.closest === 'function' && e.target.closest('.instance-card')) {
+                        isInteracting = false;
+                    }
+                } catch (err) {
+                    // Ignore errors from non-DOM targets
                 }
             }, true);
 
             // Track touch interaction
             document.addEventListener('touchstart', (e) => {
-                if (e.target.closest('.instance-card')) {
-                    isInteracting = true;
+                try {
+                    if (e.target && typeof e.target.closest === 'function' && e.target.closest('.instance-card')) {
+                        isInteracting = true;
+                    }
+                } catch (err) {
+                    // Ignore errors from non-DOM targets
                 }
             });
 
