@@ -503,9 +503,9 @@ public static class UpdateManager
                         continue;
 
                     var versionResponse = BotServer.QueryRemote(port, "VERSION");
-                    var version = versionResponse.StartsWith("ERROR") ? "Unknown" : versionResponse.Trim();
+                    var remoteVersion = versionResponse.StartsWith("ERROR") ? "Unknown" : versionResponse.Trim();
 
-                    instances.Add((process.Id, port, version));
+                    instances.Add((process.Id, port, remoteVersion));
                 }
                 catch { }
             }
