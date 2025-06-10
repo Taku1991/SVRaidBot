@@ -418,15 +418,61 @@ public static class UpdateManager
 
     private static List<(int ProcessId, int Port, string Version)> GetAllInstances(int currentPort)
     {
+        var version = "Unknown";
+        try
+        {
+            // Try SVRaidBot version first
+            var raidBotType = Type.GetType("SVRaidBot, SysBot.Pokemon.WinForms");
+            if (raidBotType != null)
+            {
+                var versionField = raidBotType.GetField("Version",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (versionField != null)
+                {
+                    version = versionField.GetValue(null)?.ToString() ?? "Unknown";
+                }
+            }
+
+            // Fallback to PokeBot version for compatibility
+            if (version == "Unknown")
+            {
+                var tradeBotType = Type.GetType("SysBot.Pokemon.Helpers.PokeBot, SysBot.Pokemon");
+                if (tradeBotType != null)
+                {
+                    var versionField = tradeBotType.GetField("Version",
+                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                    if (versionField != null)
+                    {
+                        version = versionField.GetValue(null)?.ToString() ?? "Unknown";
+                    }
+                }
+            }
+
+            if (version == "Unknown")
+            {
+                version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
+            }
+        }
+        catch
+        {
+            version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
+        }
+
         var instances = new List<(int, int, string)>
         {
-            (Environment.ProcessId, currentPort, PokeBot.Version)
+            (Environment.ProcessId, currentPort, version)
         };
 
         try
         {
-            var processes = Process.GetProcessesByName("PokeBot")
+            // Search for both SVRaidBot and PokeBot processes for compatibility
+            var raidBotProcesses = Process.GetProcessesByName("SVRaidBot")
                 .Where(p => p.Id != Environment.ProcessId);
+            
+            var pokeBotProcesses = Process.GetProcessesByName("PokeBot")
+                .Where(p => p.Id != Environment.ProcessId);
+
+            var processes = raidBotProcesses.Concat(pokeBotProcesses);
 
             foreach (var process in processes)
             {
@@ -436,8 +482,17 @@ public static class UpdateManager
                     if (string.IsNullOrEmpty(exePath))
                         continue;
 
-                    var portFile = Path.Combine(Path.GetDirectoryName(exePath)!, $"PokeBot_{process.Id}.port");
-                    if (!File.Exists(portFile))
+                    // Try both SVRaidBot and PokeBot port file formats
+                    var raidBotPortFile = Path.Combine(Path.GetDirectoryName(exePath)!, $"SVRaidBot_{process.Id}.port");
+                    var pokeBotPortFile = Path.Combine(Path.GetDirectoryName(exePath)!, $"PokeBot_{process.Id}.port");
+                    
+                    string? portFile = null;
+                    if (File.Exists(raidBotPortFile))
+                        portFile = raidBotPortFile;
+                    else if (File.Exists(pokeBotPortFile))
+                        portFile = pokeBotPortFile;
+                    
+                    if (portFile == null)
                         continue;
 
                     var portText = File.ReadAllText(portFile).Trim();
