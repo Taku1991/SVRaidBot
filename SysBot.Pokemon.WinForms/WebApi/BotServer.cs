@@ -125,26 +125,55 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         {
             try
             {
-                var context = _listener.GetContext();
-                _ = Task.Run(() => HandleRequest(context));
+                var asyncResult = _listener.BeginGetContext(null, null);
+
+                while (_running && !asyncResult.AsyncWaitHandle.WaitOne(100))
+                {
+                    // Check if we should continue listening
+                }
+
+                if (!_running)
+                    break;
+
+                var context = _listener.EndGetContext(asyncResult);
+
+                ThreadPool.QueueUserWorkItem(async _ =>
+                {
+                    try
+                    {
+                        await HandleRequest(context);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogUtil.LogError($"Error handling request: {ex.Message}", "WebServer");
+                    }
+                });
             }
-            catch (HttpListenerException) when (!_running)
+            catch (HttpListenerException ex) when (!_running || ex.ErrorCode == 995)
+            {
+                break;
+            }
+            catch (ObjectDisposedException) when (!_running)
             {
                 break;
             }
             catch (Exception ex)
             {
-                LogUtil.LogError($"Error in listener: {ex.Message}", "WebServer");
+                if (_running)
+                {
+                    LogUtil.LogError($"Error in listener: {ex.Message}", "WebServer");
+                }
             }
         }
     }
 
     private async Task HandleRequest(HttpListenerContext context)
     {
+        HttpListenerResponse? response = null;
         try
         {
             var request = context.Request;
-            var response = context.Response;
+            response = context.Response;
 
             response.Headers.Add("Access-Control-Allow-Origin", "*");
             response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -184,22 +213,48 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
             }
 
             var buffer = Encoding.UTF8.GetBytes(responseString);
-            await response.OutputStream.WriteAsync(buffer, _cts.Token);
-            response.Close();
+            response.ContentLength64 = buffer.Length;
+
+            try
+            {
+                await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                await response.OutputStream.FlushAsync();
+            }
+            catch (HttpListenerException ex) when (ex.ErrorCode == 64 || ex.ErrorCode == 1229)
+            {
+                return;
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
         }
         catch (Exception ex)
         {
             LogUtil.LogError($"Error processing request: {ex.Message}", "WebServer");
 
+            if (response != null && response.OutputStream.CanWrite)
+            {
+                try
+                {
+                    response.StatusCode = 500;
+                }
+                catch { }
+            }
+        }
+        finally
+        {
             try
             {
-                context.Response.StatusCode = 500;
-                context.Response.Close();
+                response?.Close();
             }
             catch { }
         }
     }
-
     private async Task<string> UpdateAllInstances(HttpListenerRequest request)
     {
         try
@@ -276,6 +331,142 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         }
     }
 
+    private string GetIdleStatus()
+    {
+        try
+        {
+            var instances = new List<object>();
+
+            // Local instance
+            var localBots = GetBotControllers();
+            var localIdleCount = 0;
+            var localTotalCount = localBots.Count;
+            var localNonIdleBots = new List<object>();
+
+            foreach (var controller in localBots)
+            {
+                var status = controller.ReadBotState();
+                var upperStatus = status?.ToUpper() ?? "";
+
+                if (upperStatus == "IDLE" || upperStatus == "STOPPED")
+                {
+                    localIdleCount++;
+                }
+                else
+                {
+                    localNonIdleBots.Add(new
+                    {
+                        Name = GetBotName(controller.State, GetConfig()),
+                        Status = status
+                    });
+                }
+            }
+
+            instances.Add(new
+            {
+                Port = _tcpPort,
+                ProcessId = Environment.ProcessId,
+                TotalBots = localTotalCount,
+                IdleBots = localIdleCount,
+                NonIdleBots = localNonIdleBots,
+                AllIdle = localIdleCount == localTotalCount
+            });
+
+            // Remote instances
+            var remoteInstances = ScanRemoteInstances().Where(i => i.IsOnline);
+            foreach (var instance in remoteInstances)
+            {
+                var botsResponse = QueryRemote(instance.Port, "LISTBOTS");
+                if (botsResponse.StartsWith("{") && botsResponse.Contains("Bots"))
+                {
+                    try
+                    {
+                        var botsData = JsonSerializer.Deserialize<Dictionary<string, List<Dictionary<string, object>>>>(botsResponse);
+                        if (botsData?.ContainsKey("Bots") == true)
+                        {
+                            var bots = botsData["Bots"];
+                            var idleCount = 0;
+                            var nonIdleBots = new List<object>();
+
+                            foreach (var bot in bots)
+                            {
+                                if (bot.TryGetValue("Status", out var status))
+                                {
+                                    var statusStr = status?.ToString()?.ToUpperInvariant() ?? "";
+                                    if (statusStr == "IDLE" || statusStr == "STOPPED")
+                                    {
+                                        idleCount++;
+                                    }
+                                    else
+                                    {
+                                        nonIdleBots.Add(new
+                                        {
+                                            Name = bot.TryGetValue("Name", out var name) ? name?.ToString() : "Unknown",
+                                            Status = statusStr
+                                        });
+                                    }
+                                }
+                            }
+
+                            instances.Add(new
+                            {
+                                Port = instance.Port,
+                                ProcessId = instance.ProcessId,
+                                TotalBots = bots.Count,
+                                IdleBots = idleCount,
+                                NonIdleBots = nonIdleBots,
+                                AllIdle = idleCount == bots.Count
+                            });
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            var totalBots = instances.Sum(i => (int)((dynamic)i).TotalBots);
+            var totalIdle = instances.Sum(i => (int)((dynamic)i).IdleBots);
+            var allInstancesIdle = instances.All(i => (bool)((dynamic)i).AllIdle);
+
+            if (!string.IsNullOrEmpty(body))
+            {
+                Instances = instances,
+                TotalBots = totalBots,
+                TotalIdleBots = totalIdle,
+                AllBotsIdle = allInstancesIdle
+            });
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse(ex.Message);
+        }
+    }
+
+    private async Task<string> CheckForUpdates()
+    {
+        try
+        {
+            var (updateAvailable, _, latestVersion) = await UpdateChecker.CheckForUpdatesAsync(false);
+            var changelog = await UpdateChecker.FetchChangelogAsync();
+
+            return JsonSerializer.Serialize(new
+            {
+                version = latestVersion,
+                changelog,
+                available = updateAvailable
+            });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                version = "Unknown",
+                changelog = "Unable to fetch update information",
+                available = false,
+                error = ex.Message
+            });
+        }
+    }
+
     private static int ExtractPort(string path)
     {
         var parts = path.Split('/');
@@ -299,6 +490,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         var config = GetConfig();
         var controllers = GetBotControllers();
 
+<<<<<<< HEAD
         var mode = "Unknown";
         try
         {
@@ -307,6 +499,10 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         }
         catch { }
         var name = "SVRaidBot";
+=======
+        var mode = config?.Mode.ToString() ?? "Unknown";
+        var name = config?.Hub?.BotName ?? "SVRaidBot";
+>>>>>>> upstream/main
 
         var version = "Unknown";
         try
