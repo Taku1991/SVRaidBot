@@ -313,8 +313,8 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                 {
                     Stage = "idling",
                     Success = result.UpdatesFailed == 0,
-                    TotalInstances = result.TotalInstances,
-                    UpdatesNeeded = result.UpdatesNeeded,
+                    result.TotalInstances,
+                    result.UpdatesNeeded,
                     Results = result.InstanceResults.Select(r => new
                     {
                         r.Port,
@@ -367,7 +367,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
             instances.Add(new
             {
                 Port = _tcpPort,
-                ProcessId = Environment.ProcessId,
+                Environment.ProcessId,
                 TotalBots = localTotalCount,
                 IdleBots = localIdleCount,
                 NonIdleBots = localNonIdleBots,
@@ -412,8 +412,8 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
 
                             instances.Add(new
                             {
-                                Port = instance.Port,
-                                ProcessId = instance.ProcessId,
+                                instance.Port,
+                                instance.ProcessId,
                                 TotalBots = bots.Count,
                                 IdleBots = idleCount,
                                 NonIdleBots = nonIdleBots,
@@ -539,7 +539,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         };
     }
 
-    private List<BotInstance> ScanRemoteInstances()
+    private static List<BotInstance> ScanRemoteInstances()
     {
         var instances = new List<BotInstance>();
         var currentPid = Environment.ProcessId;
