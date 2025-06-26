@@ -239,6 +239,16 @@
             border-color: var(--danger);
         }
 
+        .btn-raidbot {
+            background: linear-gradient(135deg, #8b5cf6, #a855f7);
+            border-color: #8b5cf6;
+            color: white;
+        }
+
+            .btn-raidbot:hover:not(:disabled) {
+                background: linear-gradient(135deg, #7c3aed, #9333ea);
+        }
+
         .instances-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(min(100%, 350px), 1fr));
@@ -268,6 +278,22 @@
                 box-shadow: var(--shadow-hover);
             }
 
+            .instance-card.pokebot {
+                border-left: 4px solid #10b981;
+            }
+
+                .instance-card.pokebot .instance-header {
+                    background: linear-gradient(135deg, var(--bg-secondary), rgba(16, 185, 129, 0.1));
+                }
+
+            .instance-card.raidbot {
+                border: 2px solid #8b5cf6;
+            }
+
+                .instance-card.raidbot .instance-header {
+                    background: linear-gradient(135deg, var(--bg-secondary), rgba(139, 92, 246, 0.1));
+            }
+
         .instance-header {
             background: var(--bg-secondary);
             padding: var(--spacing-md) var(--spacing-lg);
@@ -288,6 +314,19 @@
             flex: 1;
         }
 
+        .bot-type-icon {
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .bot-type-icon.pokebot {
+            color: #10b981;
+        }
+
+        .bot-type-icon.raidbot {
+            color: #8b5cf6;
+        }
+
         .instance-badge {
             padding: var(--spacing-xs) var(--spacing-sm);
             border-radius: 20px;
@@ -297,6 +336,18 @@
             color: var(--text-secondary);
             white-space: nowrap;
             flex-shrink: 0;
+        }
+
+            .instance-badge.pokebot {
+                background: rgba(16, 185, 129, 0.2);
+                color: #10b981;
+                border: 1px solid #10b981;
+            }
+
+            .instance-badge.raidbot {
+                background: rgba(139, 92, 246, 0.2);
+                color: #8b5cf6;
+                border: 1px solid #8b5cf6;
         }
 
         .instance-body {
@@ -1162,9 +1213,9 @@
                     <button class="btn" onclick="sendGlobalCommand('resume')">⏯️ Resume All</button>
                     <button class="btn" onclick="sendGlobalCommand('restart')">🔄 Restart All</button>
                     <button class="btn" onclick="sendGlobalCommand('reboot')">🔌 Reboot All</button>
-                    <button class="btn btn-primary" onclick="sendGlobalCommand('refreshmap')" id="refreshmap-btn" style="display: none;">🗺️ Refresh Map</button>
                     <button class="btn" onclick="sendGlobalCommand('screenon')">💡 Screen On</button>
                     <button class="btn" onclick="sendGlobalCommand('screenoff')">🌙 Screen Off</button>
+                    <button class="btn btn-raidbot" onclick="sendGlobalCommand('refreshmap')" id="refreshMapBtn" style="display: none;">🗺️ Refresh Map</button>
                     <button class="btn btn-primary" onclick="updateAllInstances()">⬆️ Update All</button>
                 </div>
             </div>
@@ -1275,8 +1326,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             refreshInstances();
             startAutoRefresh();
-            detectBotType();
-            startConnectionMonitor();
+            startConnectionMonitor(); // Add this line
 
             // Close menus when clicking outside
             document.addEventListener('click', (e) => {
@@ -1317,32 +1367,6 @@
         window.addEventListener('beforeunload', () => {
             if (refreshInterval) clearInterval(refreshInterval);
         });
-
-        async function detectBotType() {
-            try {
-                const response = await fetch(`${API_BASE}/instances`);
-                if (response.ok) {
-                    const data = await response.json();
-                    const hasRaidBot = data.Instances?.some(instance => 
-                        instance.Mode?.toLowerCase().includes('raid') || 
-                        instance.Name?.toLowerCase().includes('raid') ||
-                        instance.Version?.toLowerCase().includes('raid')
-                    );
-                    
-                    // Show refresh map buttons if raid bot detected
-                    if (hasRaidBot) {
-                        const refreshMapBtn = document.getElementById('refreshmap-btn');
-                        if (refreshMapBtn) refreshMapBtn.style.display = 'block';
-                        
-                        document.querySelectorAll('.refreshmap-item').forEach(btn => {
-                            btn.style.display = 'block';
-                        });
-                    }
-                }
-            } catch (error) {
-                console.log('Bot type detection failed, using default layout');
-            }
-        }
 
         let updateState = {
             newVersion: '',
@@ -1803,10 +1827,10 @@
                 reconnectDiv.id = 'reconnect-status';
                 reconnectDiv.className = 'reconnect-status';
                 reconnectDiv.innerHTML = `
-                        <div class="reconnect-icon">🔄</div>
-                        <div class="reconnect-text">Attempting to reconnect...</div>
-                        <div class="reconnect-hint">The master instance is updating. This page will automatically reconnect when the update is complete.</div>
-                    `;
+                            <div class="reconnect-icon">🔄</div>
+                            <div class="reconnect-text">Attempting to reconnect...</div>
+                            <div class="reconnect-hint">The master instance is updating. This page will automatically reconnect when the update is complete.</div>
+                        `;
                 modalBody.appendChild(reconnectDiv);
             }
         }
@@ -1915,7 +1939,7 @@
                 }
             } catch (error) {
                 console.error('Error fetching instances:', error);
-                showError('Failed to load bot instances. Make sure at least one bot instance is running.');
+                showError('Failed to load bot instances. Make sure the bot is running.');
             }
         }
 
@@ -1923,16 +1947,29 @@
             const container = document.getElementById('instances-container');
 
             if (instances.length === 0) {
-                container.innerHTML = '<div class="error-message">⚠️ No bot instances found. Make sure at least one bot instance is running.</div>';
+                container.innerHTML = '<div class="error-message">⚠️ No bot instances found. Make sure at least one PokeBot is running.</div>';
                 return;
+            }
+
+            // Check if we have any RaidBots to show the refresh map button
+            const hasRaidBots = instances.some(instance => instance.BotType === 'RaidBot');
+            const refreshMapBtn = document.getElementById('refreshMapBtn');
+            if (refreshMapBtn) {
+                refreshMapBtn.style.display = hasRaidBots ? 'inline-flex' : 'none';
             }
 
             container.innerHTML = instances.map(instance => {
                 const isOnline = instance.IsOnline || false;
                 const statusClass = isOnline ? 'online' : 'offline';
+                const botType = instance.BotType || 'Unknown';
+                const botTypeClass = botType.toLowerCase();
                 const statusIndicator = isOnline ?
                     '<span class="online-indicator"></span>Connected' :
                     '<span class="offline-indicator"></span>Disconnected';
+
+                // Bot type icon and name
+                const botIcon = getBotTypeIcon(botType);
+                const botTypeName = getBotTypeName(botType);
 
                 let instanceStatus = 'stopped';
                 let instanceStatusText = 'Stopped';
@@ -1964,94 +2001,123 @@
                 }
 
                 return `
-                            <div class="instance-card ${statusClass}" data-port="${instance.Port}">
-                                <div class="instance-header">
-                                    <h3 class="instance-title">
-                                        ${instance.Name}
-                                        <span class="instance-status-badge ${instanceStatus}">${instanceStatusText}</span>
-                                    </h3>
-                                    <span class="instance-badge">Port ${instance.Port}</span>
-                                </div>
-                                <div class="instance-body">
-                                    <div class="instance-info">
-                                        <div class="info-item">
-                                            <span class="info-label">Version</span>
-                                            <span class="info-value">${instance.Version}</span>
-                                        </div>
-                                        <div class="info-item">
-                                            <span class="info-label">Mode</span>
-                                            <span class="info-value">${instance.Mode}</span>
-                                        </div>
-                                        <div class="info-item">
-                                            <span class="info-label">Process ID</span>
-                                            <span class="info-value">${instance.ProcessId}</span>
-                                        </div>
-                                        <div class="info-item">
-                                            <span class="info-label">Connection</span>
-                                            <span class="info-value">${statusIndicator}</span>
-                                        </div>
+                            <div class="instance-card ${statusClass} ${botTypeClass}" data-port="${instance.Port}">
+                                    <div class="instance-header">
+                                        <h3 class="instance-title">
+                                        <span class="bot-type-icon ${botTypeClass}">${botIcon}</span>
+                                            ${instance.Name}
+                                            <span class="instance-status-badge ${instanceStatus}">${instanceStatusText}</span>
+                                        </h3>
+                                    <span class="instance-badge ${botTypeClass}">${botTypeName}</span>
                                     </div>
-
-                                    ${instance.BotStatuses && instance.BotStatuses.length > 0 ? `
-                                    <div class="bot-status">
-                                        <div class="info-label" style="margin-bottom: 0.5rem;">BOTS (${instance.BotStatuses.length})</div>
-                                        ${instance.BotStatuses.map((bot, index) => `
-                                            <div class="bot-status-item">
-                                                <span class="bot-name">
-                                                    <span style="color: ${getStatusColor(bot.Status)};">●</span>
-                                                    <span>${bot.Name || `Bot ${index + 1}`}</span>
-                                                </span>
-                                                <span class="bot-state ${getStatusClass(bot.Status)}">${bot.Status}</span>
+                                    <div class="instance-body">
+                                        <div class="instance-info">
+                                            <div class="info-item">
+                                                <span class="info-label">Version</span>
+                                                <span class="info-value">${instance.Version}</span>
                                             </div>
-                                        `).join('')}
-                                    </div>
-                                    ` : instance.BotCount > 0 ? `
-                                    <div class="bot-status">
-                                        <div class="info-label">BOTS</div>
-                                        <div class="bot-status-item">
-                                            <span class="bot-name">Bot Count: ${instance.BotCount}</span>
-                                            <span class="bot-state">Status Unknown</span>
+                                            <div class="info-item">
+                                                <span class="info-label">Mode</span>
+                                                <span class="info-value">${instance.Mode}</span>
+                                            </div>
+                                            <div class="info-item">
+                                                <span class="info-label">Process ID</span>
+                                                <span class="info-value">${instance.ProcessId}</span>
+                                            </div>
+                                            <div class="info-item">
+                                                <span class="info-label">Connection</span>
+                                                <span class="info-value">${statusIndicator}</span>
+                                            </div>
                                         </div>
-                                    </div>
-                                    ` : ''}
 
-                                    <div class="instance-controls">
-                                        <button class="action-menu-button" onclick="toggleActionMenu(event, ${instance.Port})" ${!isOnline ? 'disabled' : ''}>
-                                            ⚡ Actions <span style="font-size: 0.75rem;">▼</span>
-                                        </button>
-                                        <div class="action-menu" id="action-menu-${instance.Port}">
-                                            <button class="action-menu-item success" onclick="sendInstanceCommand(${instance.Port}, 'start')">
-                                                ▶️ Start
+                                        ${instance.BotStatuses && instance.BotStatuses.length > 0 ? `
+                                        <div class="bot-status">
+                                            <div class="info-label" style="margin-bottom: 0.5rem;">BOTS (${instance.BotStatuses.length})</div>
+                                            ${instance.BotStatuses.map((bot, index) => `
+                                                <div class="bot-status-item">
+                                                    <span class="bot-name">
+                                                        <span style="color: ${getStatusColor(bot.Status)};">●</span>
+                                                        <span>${bot.Name || `Bot ${index + 1}`}</span>
+                                                    </span>
+                                                    <span class="bot-state ${getStatusClass(bot.Status)}">${bot.Status}</span>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                        ` : instance.BotCount > 0 ? `
+                                        <div class="bot-status">
+                                            <div class="info-label">BOTS</div>
+                                            <div class="bot-status-item">
+                                                <span class="bot-name">Bot Count: ${instance.BotCount}</span>
+                                                <span class="bot-state">Status Unknown</span>
+                                            </div>
+                                        </div>
+                                        ` : ''}
+
+                                        <div class="instance-controls">
+                                            <button class="action-menu-button" onclick="toggleActionMenu(event, ${instance.Port})" ${!isOnline ? 'disabled' : ''}>
+                                                ⚡ Actions <span style="font-size: 0.75rem;">▼</span>
                                             </button>
-                                            <button class="action-menu-item danger" onclick="sendInstanceCommand(${instance.Port}, 'stop')">
-                                                ⏹️ Stop
-                                            </button>
-                                            <button class="action-menu-item warning" onclick="sendInstanceCommand(${instance.Port}, 'idle')">
-                                                ⏸️ Idle
-                                            </button>
-                                            <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'resume')">
-                                                ⏯️ Resume
-                                            </button>
+                                            <div class="action-menu" id="action-menu-${instance.Port}">
+                                                <button class="action-menu-item success" onclick="sendInstanceCommand(${instance.Port}, 'start')">
+                                                    ▶️ Start
+                                                </button>
+                                                <button class="action-menu-item danger" onclick="sendInstanceCommand(${instance.Port}, 'stop')">
+                                                    ⏹️ Stop
+                                                </button>
+                                                <button class="action-menu-item warning" onclick="sendInstanceCommand(${instance.Port}, 'idle')">
+                                                    ⏸️ Idle
+                                                </button>
+                                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'resume')">
+                                                    ⏯️ Resume
+                                                </button>
+                                                <div class="action-menu-divider"></div>
+                                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'restart')">
+                                                    🔄 Restart
+                                                </button>
+                                                <button class="action-menu-item danger" onclick="sendInstanceCommand(${instance.Port}, 'reboot')">
+                                                    🔌 Reboot
+                                                </button>
+                                                <div class="action-menu-divider"></div>
+                                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenon')">
+                                                    💡 Screen On
+                                                </button>
+                                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenoff')">
+                                                    🌙 Screen Off
+                                                </button>
+                                            ${botType === 'RaidBot' ? `
                                             <div class="action-menu-divider"></div>
-                                            <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'restart')">
-                                                🔄 Restart
+                                            <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'refreshmap')" style="color: #8b5cf6;">
+                                                🗺️ Refresh Map
                                             </button>
-                                            <button class="action-menu-item danger" onclick="sendInstanceCommand(${instance.Port}, 'reboot')">
-                                                🔌 Reboot
-                                            </button>
-                                            <div class="action-menu-divider"></div>
-                                            <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenon')">
-                                                💡 Screen On
-                                            </button>
-                                            <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenoff')">
-                                                🌙 Screen Off
-                                            </button>
+                                            ` : ''}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        `;
+                            `;
             }).join('');
+        }
+
+        function getBotTypeIcon(botType) {
+            switch (botType) {
+                case 'PokeBot':
+                    return '🎮';
+                case 'RaidBot':
+                    return '⚔️';
+                default:
+                    return '🤖';
+            }
+        }
+
+        function getBotTypeName(botType) {
+            switch (botType) {
+                case 'PokeBot':
+                    return 'PokeBot';
+                case 'RaidBot':
+                    return 'RaidBot';
+                default:
+                    return 'Unknown';
+            }
         }
 
         function manualRefresh() {

@@ -32,8 +32,10 @@ public static class WebApiExtensions
         {
             if (IsPortInUse(WebPort))
             {
+                LogUtil.LogInfo($"Web port {WebPort} is in use by another bot instance. Starting as slave...", "WebServer");
                 _tcpPort = FindAvailablePort(8081);
                 StartTcpOnly();
+                LogUtil.LogInfo($"Slave instance started with TCP port {_tcpPort}. Monitoring master...", "WebServer");
 
                 // Start monitoring for master failure
                 StartMasterMonitor();
@@ -44,7 +46,9 @@ public static class WebApiExtensions
             TryAddUrlReservation(WebPort);
 
             _tcpPort = FindAvailablePort(8081);
+            LogUtil.LogInfo($"Starting as master web server on port {WebPort} with TCP port {_tcpPort}", "WebServer");
             StartFullServer();
+            LogUtil.LogInfo($"Web interface is available at http://localhost:{WebPort}", "WebServer");
         }
         catch (Exception ex)
         {
@@ -237,7 +241,6 @@ public static class WebApiExtensions
         if (_main == null)
             return "ERROR: Main form not initialized";
 
-        // Parse command and optional bot ID (format: "COMMAND:BOTID")
         var parts = command.Split(':');
         var cmd = parts[0].ToUpperInvariant();
         var botId = parts.Length > 1 ? parts[1] : null;
@@ -253,91 +256,14 @@ public static class WebApiExtensions
             "REFRESHMAPALL" => ExecuteGlobalCommand(BotControlCommand.RefreshMap),
             "SCREENONALL" => ExecuteGlobalCommand(BotControlCommand.ScreenOnAll),
             "SCREENOFFALL" => ExecuteGlobalCommand(BotControlCommand.ScreenOffAll),
-            
-            // Individual bot commands (with :botId)
-            "START" when !string.IsNullOrEmpty(botId) => ExecuteIndividualCommand(BotControlCommand.Start, botId),
-            "STOP" when !string.IsNullOrEmpty(botId) => ExecuteIndividualCommand(BotControlCommand.Stop, botId),
-            "IDLE" when !string.IsNullOrEmpty(botId) => ExecuteIndividualCommand(BotControlCommand.Idle, botId),
-            "RESUME" when !string.IsNullOrEmpty(botId) => ExecuteIndividualCommand(BotControlCommand.Resume, botId),
-            "RESTART" when !string.IsNullOrEmpty(botId) => ExecuteIndividualCommand(BotControlCommand.Restart, botId),
-            "REBOOT" when !string.IsNullOrEmpty(botId) => ExecuteIndividualCommand(BotControlCommand.RebootAndStop, botId),
-            
-            // Fallback: if no botId specified, execute on all bots
-            "START" => ExecuteGlobalCommand(BotControlCommand.Start),
-            "STOP" => ExecuteGlobalCommand(BotControlCommand.Stop),
-            "IDLE" => ExecuteGlobalCommand(BotControlCommand.Idle),
-            "RESUME" => ExecuteGlobalCommand(BotControlCommand.Resume),
-            "RESTART" => ExecuteGlobalCommand(BotControlCommand.Restart),
-            "REBOOT" => ExecuteGlobalCommand(BotControlCommand.RebootAndStop),
-            "REFRESHMAP" => ExecuteGlobalCommand(BotControlCommand.RefreshMap),
-            "SCREENON" => ExecuteGlobalCommand(BotControlCommand.ScreenOnAll),
-            "SCREENOFF" => ExecuteGlobalCommand(BotControlCommand.ScreenOffAll),
-            
             "LISTBOTS" => GetBotsList(),
             "STATUS" => GetBotStatuses(botId),
             "ISREADY" => CheckReady(),
             "INFO" => GetInstanceInfo(),
-            "VERSION" => GetVersion(),
+            "VERSION" => SVRaidBot.Version,
             "UPDATE" => TriggerUpdate(),
-            _ => $"ERROR: Unknown command '{cmd}'. Use format 'COMMAND' or 'COMMAND:BOTID' for individual bot control."
+            _ => $"ERROR: Unknown command '{cmd}'"
         };
-    }
-
-    private static string ExecuteIndividualCommand(BotControlCommand command, string botId)
-    {
-        try
-        {
-            var controllers = GetBotControllers();
-            var targetBot = controllers.FirstOrDefault(c => 
-                $"{c.State.Connection.IP}:{c.State.Connection.Port}" == botId ||
-                c.State.Connection.IP == botId);
-
-            if (targetBot == null)
-            {
-                return $"ERROR: Bot with ID '{botId}' not found. Available bots: {string.Join(", ", controllers.Select(c => $"{c.State.Connection.IP}:{c.State.Connection.Port}"))}";
-            }
-
-            _main!.BeginInvoke((MethodInvoker)(() =>
-            {
-                // Send command to specific bot controller
-                var sendMethod = targetBot.GetType().GetMethod("SendCommand", 
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                
-                if (sendMethod != null)
-                {
-                    sendMethod.Invoke(targetBot, new object[] { command });
-                }
-                else
-                {
-                    // Fallback: try to get the bot and send command directly
-                    var bot = targetBot.GetBot();
-                    if (bot != null)
-                    {
-                        switch (command)
-                        {
-                            case BotControlCommand.Start:
-                                if (!bot.IsRunning) bot.Start();
-                                break;
-                            case BotControlCommand.Stop:
-                                if (bot.IsRunning) bot.Stop();
-                                break;
-                            case BotControlCommand.Idle:
-                                bot.Pause();
-                                break;
-                            case BotControlCommand.Resume:
-                                bot.Start();
-                                break;
-                        }
-                    }
-                }
-            }));
-
-            return $"OK: {command} command sent to bot {botId} ({targetBot.State.Connection.IP})";
-        }
-        catch (Exception ex)
-        {
-            return $"ERROR: Failed to execute {command} on bot {botId} - {ex.Message}";
-        }
     }
 
     private static string TriggerUpdate()
@@ -349,42 +275,19 @@ public static class WebApiExtensions
 
             _main.BeginInvoke((MethodInvoker)(async () =>
             {
-                var updateManagerType = AppDomain.CurrentDomain.GetAssemblies()
-                    .SelectMany(a => a.GetTypes())
-                    .FirstOrDefault(t => t.Name == "UpdateChecker");
-
-                if (updateManagerType != null)
+                var (updateAvailable, _, newVersion) = await UpdateChecker.CheckForUpdatesAsync(false);
+                if (updateAvailable)
                 {
-                    var checkMethod = updateManagerType.GetMethod("CheckForUpdatesAsync", 
-                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                    
-                    if (checkMethod != null)
-                    {
-                        var result = await (Task<(bool, string, string)>)checkMethod.Invoke(null, new object[] { false });
-                        var (updateAvailable, _, newVersion) = result;
-                        
-                        if (updateAvailable)
-                        {
-                            var updateFormType = AppDomain.CurrentDomain.GetAssemblies()
-                                .SelectMany(a => a.GetTypes())
-                                .FirstOrDefault(t => t.Name == "UpdateForm");
-                                
-                            if (updateFormType != null)
-                            {
-                                var updateForm = Activator.CreateInstance(updateFormType, false, newVersion, true);
-                                var performMethod = updateFormType.GetMethod("PerformUpdate");
-                                performMethod?.Invoke(updateForm, null);
-                            }
-                        }
-                    }
+                    var updateForm = new UpdateForm(false, newVersion, true);
+                    updateForm.PerformUpdate();
                 }
             }));
 
-            return "OK: Update check triggered";
+            return "OK: Update triggered";
         }
         catch (Exception ex)
         {
-            return $"ERROR: Update failed - {ex.Message}";
+            return $"ERROR: {ex.Message}";
         }
     }
 
@@ -527,6 +430,7 @@ public static class WebApiExtensions
                 Version = version,
                 Mode = mode,
                 Name = name,
+                BotType = "RaidBot",
                 Environment.ProcessId,
                 Port = _tcpPort
             };
@@ -592,13 +496,9 @@ public static class WebApiExtensions
         {
             var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
             var exeDir = Path.GetDirectoryName(exePath) ?? Program.WorkingDirectory;
-            
-            // Create both PokeBot and SVRaidBot port files for compatibility
-            var pokeBotPortFile = Path.Combine(exeDir, $"PokeBot_{Environment.ProcessId}.port");
-            var raidBotPortFile = Path.Combine(exeDir, $"SVRaidBot_{Environment.ProcessId}.port");
-            
-            File.WriteAllText(pokeBotPortFile, _tcpPort.ToString());
-            File.WriteAllText(raidBotPortFile, _tcpPort.ToString());
+            var portFile = Path.Combine(exeDir, $"SVRaidBot_{Environment.ProcessId}.port");
+            File.WriteAllText(portFile, _tcpPort.ToString());
+            LogUtil.LogInfo($"Created port file: {portFile} with TCP port {_tcpPort}", "WebServer");
         }
         catch (Exception ex)
         {
@@ -612,16 +512,10 @@ public static class WebApiExtensions
         {
             var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
             var exeDir = Path.GetDirectoryName(exePath) ?? Program.WorkingDirectory;
-            
-            // Clean up both port files
-            var pokeBotPortFile = Path.Combine(exeDir, $"PokeBot_{Environment.ProcessId}.port");
-            var raidBotPortFile = Path.Combine(exeDir, $"SVRaidBot_{Environment.ProcessId}.port");
+            var portFile = Path.Combine(exeDir, $"SVRaidBot_{Environment.ProcessId}.port");
 
-            if (File.Exists(pokeBotPortFile))
-                File.Delete(pokeBotPortFile);
-                
-            if (File.Exists(raidBotPortFile))
-                File.Delete(raidBotPortFile);
+            if (File.Exists(portFile))
+                File.Delete(portFile);
         }
         catch (Exception ex)
         {
@@ -682,5 +576,337 @@ public static class WebApiExtensions
         {
             LogUtil.LogError($"Error stopping web server: {ex.Message}", "WebServer");
         }
+    }
+
+    public static void StartWebServer(this Main mainForm, int port = 8080, int tcpPort = 8081)
+    {
+        try
+        {
+            var server = new BotServer(mainForm, port, tcpPort);
+            server.Start();
+
+            // Create port files for both bot types for universal detection
+            CreatePortFiles(tcpPort);
+
+            var config = GetConfig();
+            LogUtil.LogInfo($"Web server started on port {port}, TCP on {tcpPort}", "WebServer");
+            LogUtil.LogInfo($"Access the control panel at: http://localhost:{port}/", "WebServer");
+
+            var property = mainForm.GetType().GetProperty("WebServer",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            property?.SetValue(mainForm, server);
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Failed to start web server: {ex.Message}", "WebServer");
+        }
+    }
+
+    private static void CreatePortFiles(int tcpPort)
+    {
+        try
+        {
+            var exePath = Application.ExecutablePath;
+            var exeDir = Path.GetDirectoryName(exePath);
+            var processId = Environment.ProcessId;
+
+            // Create both bot type port files for universal detection
+            var pokeBotPortFile = Path.Combine(exeDir!, $"PokeBot_{processId}.port");
+            var raidBotPortFile = Path.Combine(exeDir!, $"SVRaidBot_{processId}.port");
+
+            // Delete existing files first
+            if (File.Exists(pokeBotPortFile))
+                File.Delete(pokeBotPortFile);
+            if (File.Exists(raidBotPortFile))
+                File.Delete(raidBotPortFile);
+
+            // Create the appropriate port file based on bot type
+            var botType = DetectBotType();
+            if (botType == BotType.RaidBot)
+            {
+                File.WriteAllText(raidBotPortFile, tcpPort.ToString());
+                LogUtil.LogInfo($"Created RaidBot port file: {raidBotPortFile}", "WebServer");
+            }
+            else if (botType == BotType.PokeBot)
+            {
+                File.WriteAllText(pokeBotPortFile, tcpPort.ToString());
+                LogUtil.LogInfo($"Created PokeBot port file: {pokeBotPortFile}", "WebServer");
+            }
+            else
+            {
+                // Unknown type, create both for safety
+                File.WriteAllText(raidBotPortFile, tcpPort.ToString());
+                File.WriteAllText(pokeBotPortFile, tcpPort.ToString());
+                LogUtil.LogInfo($"Created both bot type port files (Unknown type detected)", "WebServer");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Failed to create port file: {ex.Message}", "WebServer");
+        }
+    }
+
+    private enum BotType
+    {
+        PokeBot,
+        RaidBot,
+        Unknown
+    }
+
+    private static BotType DetectBotType()
+    {
+        try
+        {
+            // Try to detect RaidBot first (since this is in RaidBot folder)
+            var raidBotType = Type.GetType("SysBot.Pokemon.SV.BotRaid.Helpers.SVRaidBot, SysBot.Pokemon");
+            if (raidBotType != null)
+                return BotType.RaidBot;
+
+            // Try to detect PokeBot
+            var pokeBotType = Type.GetType("SysBot.Pokemon.Helpers.PokeBot, SysBot.Pokemon");
+            if (pokeBotType != null)
+                return BotType.PokeBot;
+
+            return BotType.Unknown;
+        }
+        catch
+        {
+            return BotType.Unknown;
+        }
+    }
+
+
+
+    public static string HandleApiRequest(this Main mainForm, string command)
+    {
+        try
+        {
+            var parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var cmd = parts[0].ToUpper();
+
+            return cmd switch
+            {
+                "STATUS" => GetStatusResponse(mainForm),
+                "START" => HandleStartCommand(mainForm, parts),
+                "STOP" => HandleStopCommand(mainForm, parts),
+                "IDLE" => HandleIdleCommand(mainForm, parts),
+                "STARTALL" => HandleStartAllCommand(mainForm),
+                "STOPALL" => HandleStopAllCommand(mainForm),
+                "IDLEALL" => HandleIdleAllCommand(mainForm),
+                "LISTBOTS" => GetBotsListResponse(mainForm),
+                "INFO" => GetInfoResponse(mainForm),
+                "VERSION" => GetVersionResponse(),
+                "UPDATE" => HandleUpdateCommand(mainForm),
+                "REFRESHMAPALL" => HandleRefreshMapAllCommand(mainForm),
+                _ => CreateErrorResponse($"Unknown command: {cmd}")
+            };
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse($"Error processing command: {ex.Message}");
+        }
+    }
+
+    private static string HandleRefreshMapAllCommand(Main mainForm)
+    {
+        try
+        {
+            // Check if this is a RaidBot
+            var botType = DetectBotType();
+            if (botType != BotType.RaidBot)
+            {
+                return CreateErrorResponse("REFRESHMAPALL command is only available for RaidBot instances");
+            }
+
+            var flpBotsField = mainForm.GetType().GetField("FLP_Bots",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            if (flpBotsField?.GetValue(mainForm) is FlowLayoutPanel flpBots)
+            {
+                var controllers = flpBots.Controls.OfType<BotController>().ToList();
+                var refreshed = 0;
+
+                foreach (var controller in controllers)
+                {
+                    try
+                    {
+                        // Send refresh map command to each bot
+                        controller.SendCommand(BotControlCommand.RefreshMap, false);
+                        refreshed++;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogUtil.LogError($"Failed to refresh map for bot: {ex.Message}", "WebServer");
+                    }
+                }
+
+                return $"Refresh map command sent to {refreshed} RaidBot instances";
+            }
+
+            return CreateErrorResponse("No bots found to refresh");
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse($"Error refreshing maps: {ex.Message}");
+        }
+    }
+
+    private static string GetStatusResponse(Main mainForm)
+    {
+        try
+        {
+            var config = GetConfig();
+            var controllers = GetBotControllers();
+            
+            var statuses = controllers.Select(c => new
+            {
+                Name = GetBotName(c.State, config),
+                Status = c.ReadBotState(),
+                IP = c.State.Connection.IP,
+                Port = c.State.Connection.Port
+            }).ToList();
+
+            return System.Text.Json.JsonSerializer.Serialize(new { Bots = statuses });
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse($"Error getting status: {ex.Message}");
+        }
+    }
+
+    private static string HandleStartCommand(Main mainForm, string[] parts)
+    {
+        try
+        {
+            if (parts.Length > 1)
+            {
+                // Start specific bot by ID/IP
+                var botId = parts[1];
+                var controllers = GetBotControllers();
+                var controller = controllers.FirstOrDefault(c => 
+                    c.State.Connection.IP == botId || 
+                    $"{c.State.Connection.IP}:{c.State.Connection.Port}" == botId);
+                
+                if (controller != null)
+                {
+                    controller.SendCommand(BotControlCommand.Start, false);
+                    return $"Start command sent to bot {botId}";
+                }
+                return CreateErrorResponse($"Bot {botId} not found");
+            }
+            else
+            {
+                // Start all bots
+                return ExecuteGlobalCommand(BotControlCommand.Start);
+            }
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse($"Error starting bots: {ex.Message}");
+        }
+    }
+
+    private static string HandleStopCommand(Main mainForm, string[] parts)
+    {
+        try
+        {
+            if (parts.Length > 1)
+            {
+                // Stop specific bot by ID/IP
+                var botId = parts[1];
+                var controllers = GetBotControllers();
+                var controller = controllers.FirstOrDefault(c => 
+                    c.State.Connection.IP == botId || 
+                    $"{c.State.Connection.IP}:{c.State.Connection.Port}" == botId);
+                
+                if (controller != null)
+                {
+                    controller.SendCommand(BotControlCommand.Stop, false);
+                    return $"Stop command sent to bot {botId}";
+                }
+                return CreateErrorResponse($"Bot {botId} not found");
+            }
+            else
+            {
+                // Stop all bots
+                return ExecuteGlobalCommand(BotControlCommand.Stop);
+            }
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse($"Error stopping bots: {ex.Message}");
+        }
+    }
+
+    private static string HandleIdleCommand(Main mainForm, string[] parts)
+    {
+        try
+        {
+            if (parts.Length > 1)
+            {
+                // Idle specific bot by ID/IP
+                var botId = parts[1];
+                var controllers = GetBotControllers();
+                var controller = controllers.FirstOrDefault(c => 
+                    c.State.Connection.IP == botId || 
+                    $"{c.State.Connection.IP}:{c.State.Connection.Port}" == botId);
+                
+                if (controller != null)
+                {
+                    controller.SendCommand(BotControlCommand.Idle, false);
+                    return $"Idle command sent to bot {botId}";
+                }
+                return CreateErrorResponse($"Bot {botId} not found");
+            }
+            else
+            {
+                // Idle all bots
+                return ExecuteGlobalCommand(BotControlCommand.Idle);
+            }
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse($"Error idling bots: {ex.Message}");
+        }
+    }
+
+    private static string HandleStartAllCommand(Main mainForm)
+    {
+        return ExecuteGlobalCommand(BotControlCommand.Start);
+    }
+
+    private static string HandleStopAllCommand(Main mainForm)
+    {
+        return ExecuteGlobalCommand(BotControlCommand.Stop);
+    }
+
+    private static string HandleIdleAllCommand(Main mainForm)
+    {
+        return ExecuteGlobalCommand(BotControlCommand.Idle);
+    }
+
+    private static string GetBotsListResponse(Main mainForm)
+    {
+        return GetBotsList();
+    }
+
+    private static string GetInfoResponse(Main mainForm)
+    {
+        return GetInstanceInfo();
+    }
+
+    private static string GetVersionResponse()
+    {
+        return SVRaidBot.Version;
+    }
+
+    private static string HandleUpdateCommand(Main mainForm)
+    {
+        return TriggerUpdate();
+    }
+
+    private static string CreateErrorResponse(string message)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(new { Error = message, Timestamp = DateTime.Now });
     }
 }

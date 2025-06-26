@@ -12,7 +12,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using SysBot.Base;
-using static System.Windows.Forms.Design.AxImporter;
 
 namespace SysBot.Pokemon.WinForms.WebApi;
 
@@ -26,6 +25,16 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
     private readonly Main _mainForm = mainForm ?? throw new ArgumentNullException(nameof(mainForm));
     private volatile bool _running;
     private string? _htmlTemplate;
+
+    // Bot type detection cache
+    private static readonly Dictionary<int, BotType> _botTypeCache = new();
+
+    public enum BotType
+    {
+        PokeBot,
+        RaidBot,
+        Unknown
+    }
 
     private string HtmlTemplate
     {
@@ -84,7 +93,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                 LogUtil.LogError($"Web server requires administrator privileges for network access. Currently limited to localhost only.", "WebServer");
                 LogUtil.LogInfo("To enable network access, either:", "WebServer");
                 LogUtil.LogInfo("1. Run this application as Administrator", "WebServer");
-                LogUtil.LogInfo("2. Or run this command as admin: netsh http add urlacl url=http://+:8080/ user=Everyone", "WebServer");
+                LogUtil.LogInfo($"2. Or run this command as admin: netsh http add urlacl url=http://+:{_port}/ user=Everyone", "WebServer");
             }
 
             _running = true;
@@ -256,7 +265,6 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
             catch { }
         }
     }
-
     private async Task<string> UpdateAllInstances(HttpListenerRequest request)
     {
         try
@@ -288,10 +296,10 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                 {
                     Stage = "updating",
                     Success = result.UpdatesFailed == 0 && result.UpdatesNeeded > 0,
-                result.TotalInstances,
-                result.UpdatesNeeded,
-                result.UpdatesStarted,
-                result.UpdatesFailed,
+                    result.TotalInstances,
+                    result.UpdatesNeeded,
+                    result.UpdatesStarted,
+                    result.UpdatesFailed,
                     Results = result.InstanceResults.Select(r => new
                     {
                         r.Port,
@@ -447,14 +455,16 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
     {
         try
         {
-            var (updateAvailable, _, latestVersion) = await UpdateChecker.CheckForUpdatesAsync(false);
-            var changelog = await UpdateChecker.FetchChangelogAsync();
+            var botType = DetectLocalBotType();
+            var (updateAvailable, _, latestVersion) = await CheckForUpdatesForBotType(botType);
+            var changelog = await FetchChangelogForBotType(botType);
 
             return JsonSerializer.Serialize(new
             {
                 version = latestVersion,
                 changelog,
-                available = updateAvailable
+                available = updateAvailable,
+                botType = botType.ToString()
             });
         }
         catch (Exception ex)
@@ -466,6 +476,91 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                 available = false,
                 error = ex.Message
             });
+        }
+    }
+
+    private async Task<(bool, string, string)> CheckForUpdatesForBotType(BotType botType)
+    {
+        try
+        {
+            return botType switch
+            {
+                BotType.PokeBot => await CheckPokeBotUpdates(),
+                BotType.RaidBot => await CheckRaidBotUpdates(),
+                _ => (false, "", "Unknown")
+            };
+        }
+        catch
+        {
+            return (false, "", "Unknown");
+        }
+    }
+
+
+
+    private async Task<(bool, string, string)> CheckPokeBotUpdates()
+    {
+        try
+        {
+            // Fallback for PokeBot - this wouldn't actually be called for RaidBot
+            return (false, "", "Unknown");
+        }
+        catch
+        {
+            return (false, "", "Unknown");
+        }
+    }
+
+    private async Task<(bool, string, string)> CheckRaidBotUpdates()
+    {
+        try
+        {
+            var result = await UpdateChecker.CheckForUpdatesAsync(false);
+            return (result.UpdateAvailable, "", result.NewVersion);
+        }
+        catch
+        {
+            return (false, "", "Unknown");
+        }
+    }
+
+    private async Task<string> FetchChangelogForBotType(BotType botType)
+    {
+        try
+        {
+            return botType switch
+            {
+                BotType.PokeBot => await FetchPokeBotChangelog(),
+                BotType.RaidBot => await UpdateChecker.FetchChangelogAsync(),
+                _ => "No changelog available"
+            };
+        }
+        catch
+        {
+            return "Unable to fetch changelog";
+        }
+    }
+
+    private async Task<string> FetchPokeBotChangelog()
+    {
+        try
+        {
+            var pokeBotUpdateCheckerType = Type.GetType("SysBot.Pokemon.Helpers.UpdateChecker, SysBot.Pokemon");
+            if (pokeBotUpdateCheckerType != null)
+            {
+                var fetchMethod = pokeBotUpdateCheckerType.GetMethod("FetchChangelogAsync");
+                if (fetchMethod != null)
+                {
+                    var task = (Task<string>)fetchMethod.Invoke(null, null);
+                    return await task;
+                }
+            }
+
+            return "Unable to fetch PokeBot changelog";
+        }
+        catch
+        {
+            return "No changelog available";
         }
     }
 
@@ -493,31 +588,10 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         var controllers = GetBotControllers();
 
         var mode = config?.Mode.ToString() ?? "Unknown";
-        var name = config?.Hub?.BotName ?? "PokeBot";
+        var botType = DetectLocalBotType();
+        var name = GetBotName(config, botType);
 
-        var version = "Unknown";
-        try
-        {
-            var tradeBotType = Type.GetType("SysBot.Pokemon.Helpers.PokeBot, SysBot.Pokemon");
-            if (tradeBotType != null)
-            {
-                var versionField = tradeBotType.GetField("Version",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                if (versionField != null)
-                {
-                    version = versionField.GetValue(null)?.ToString() ?? "Unknown";
-                }
-            }
-
-            if (version == "Unknown")
-            {
-                version = _mainForm.GetType().Assembly.GetName().Version?.ToString() ?? "1.0.0";
-            }
-        }
-        catch
-        {
-            version = _mainForm.GetType().Assembly.GetName().Version?.ToString() ?? "1.0.0";
-        }
+        var version = GetVersionForBotType(botType);
 
         var botStatuses = controllers.Select(c => new BotStatusInfo
         {
@@ -535,31 +609,153 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
             BotCount = botStatuses.Count,
             IsOnline = true,
             IsMaster = true,
-            BotStatuses = botStatuses
+            BotStatuses = botStatuses,
+            BotType = botType.ToString()
         };
     }
 
-    private static List<BotInstance> ScanRemoteInstances()
+    private BotType DetectLocalBotType()
+    {
+        try
+        {
+            // Try to detect RaidBot first (since this is in RaidBot folder)
+            var raidBotType = Type.GetType("SysBot.Pokemon.SV.BotRaid.Helpers.SVRaidBot, SysBot.Pokemon");
+            if (raidBotType != null)
+            {
+                return BotType.RaidBot;
+            }
+
+            // Try to detect PokeBot
+            var pokeBotType = Type.GetType("SysBot.Pokemon.Helpers.PokeBot, SysBot.Pokemon");
+            if (pokeBotType != null)
+            {
+                return BotType.PokeBot;
+            }
+
+            return BotType.Unknown;
+        }
+        catch
+        {
+            return BotType.Unknown;
+        }
+    }
+
+    private string GetVersionForBotType(BotType botType)
+    {
+        try
+        {
+            return botType switch
+            {
+                BotType.PokeBot => GetPokeBotVersion(),
+                BotType.RaidBot => GetRaidBotVersion(),
+                _ => _mainForm.GetType().Assembly.GetName().Version?.ToString() ?? "1.0.0"
+            };
+        }
+        catch
+        {
+            return _mainForm.GetType().Assembly.GetName().Version?.ToString() ?? "1.0.0";
+        }
+    }
+
+    private string GetPokeBotVersion()
+    {
+        try
+        {
+            var pokeBotType = Type.GetType("SysBot.Pokemon.Helpers.PokeBot, SysBot.Pokemon");
+            if (pokeBotType != null)
+            {
+                var versionField = pokeBotType.GetField("Version",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (versionField != null)
+                {
+                    return versionField.GetValue(null)?.ToString() ?? "Unknown";
+                }
+            }
+            return "Unknown";
+        }
+        catch
+        {
+            return "Unknown";
+        }
+    }
+
+    private string GetRaidBotVersion()
+    {
+        try
+        {
+            var raidBotType = Type.GetType("SysBot.Pokemon.SV.BotRaid.Helpers.SVRaidBot, SysBot.Pokemon");
+            if (raidBotType != null)
+            {
+                var versionField = raidBotType.GetField("Version",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                if (versionField != null)
+                {
+                    return versionField.GetValue(null)?.ToString() ?? "Unknown";
+                }
+            }
+            return "Unknown";
+        }
+        catch
+        {
+            return "Unknown";
+        }
+    }
+
+    private string GetBotName(ProgramConfig? config, BotType botType)
+    {
+        if (!string.IsNullOrEmpty(config?.Hub?.BotName))
+            return config.Hub.BotName;
+
+        return botType switch
+        {
+            BotType.PokeBot => "PokeBot",
+            BotType.RaidBot => "SVRaidBot",
+            _ => "Universal Bot"
+        };
+    }
+
+    private static HashSet<int> _knownInstances = new HashSet<int>();
+    
+    private List<BotInstance> ScanRemoteInstances()
     {
         var instances = new List<BotInstance>();
-        var currentPid = Environment.ProcessId;
+        var currentInstances = new HashSet<int>();
 
         try
         {
-            // Search for both PokeBot and SVRaidBot processes
-            var pokeBotProcesses = Process.GetProcessesByName("PokeBot")
-                .Where(p => p.Id != currentPid);
-            
-            var raidBotProcesses = Process.GetProcessesByName("SVRaidBot")
-                .Where(p => p.Id != currentPid);
-
-            var allProcesses = pokeBotProcesses.Concat(raidBotProcesses);
-
-            foreach (var process in allProcesses)
+            // Only scan ports 8081-8110 for bot instances (reduced range for efficiency)
+            for (int port = 8081; port <= 8110; port++)
             {
-                var instance = TryCreateInstance(process);
-                if (instance != null)
-                    instances.Add(instance);
+                if (port == _tcpPort) continue; // Skip our own port
+
+                try
+                {
+                    var instance = TryCreateInstanceFromPort(port);
+                    if (instance != null)
+                    {
+                        instances.Add(instance);
+                        currentInstances.Add(port);
+                        
+                        // Only log new instances
+                        if (!_knownInstances.Contains(port))
+                        {
+                            LogUtil.LogInfo($"Found new bot instance on port {port}: {instance.BotType}", "WebServer");
+                            _knownInstances.Add(port);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore port scan errors
+                }
+            }
+            
+            // Log removed instances
+            var removedInstances = _knownInstances.Except(currentInstances).ToList();
+            foreach (var port in removedInstances)
+            {
+                LogUtil.LogInfo($"Bot instance on port {port} is no longer available", "WebServer");
+                _knownInstances.Remove(port);
             }
         }
         catch (Exception ex)
@@ -570,48 +766,93 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         return instances;
     }
 
-    private static BotInstance? TryCreateInstance(Process process)
+    private static BotInstance? TryCreateInstanceFromPort(int port)
     {
         try
         {
-            var exePath = process.MainModule?.FileName;
-            if (string.IsNullOrEmpty(exePath))
+            // Test if port is responding to bot commands
+            if (!IsPortOpen(port))
                 return null;
 
-            var exeDir = Path.GetDirectoryName(exePath)!;
-            
-            // Try both PokeBot and SVRaidBot port file formats
-            var pokeBotPortFile = Path.Combine(exeDir, $"PokeBot_{process.Id}.port");
-            var raidBotPortFile = Path.Combine(exeDir, $"SVRaidBot_{process.Id}.port");
-            
-            string? portFile = null;
-            if (File.Exists(pokeBotPortFile))
-                portFile = pokeBotPortFile;
-            else if (File.Exists(raidBotPortFile))
-                portFile = raidBotPortFile;
-            
-            if (portFile == null)
+            // Try to get instance info
+            var infoResponse = QueryRemote(port, "INFO");
+            if (string.IsNullOrEmpty(infoResponse) || infoResponse.StartsWith("ERROR"))
                 return null;
 
-            var portText = File.ReadAllText(portFile).Trim();
-            if (portText.StartsWith("ERROR:") || !int.TryParse(portText, out var port))
-                return null;
-
-            var isOnline = IsPortOpen(port);
+            // Parse the response to determine bot type and other info
             var instance = new BotInstance
             {
-                ProcessId = process.Id,
-                Name = process.ProcessName, // Use actual process name
+                ProcessId = 0, // We don't know the PID from port scanning
+                Name = "Unknown Bot",
                 Port = port,
                 Version = "Unknown",
                 Mode = "Unknown",
                 BotCount = 0,
-                IsOnline = isOnline
+                IsOnline = true,
+                BotType = "Unknown"
             };
 
-            if (isOnline)
+            // Try to parse JSON response
+            if (infoResponse.StartsWith("{"))
             {
-                UpdateInstanceInfo(instance, port);
+                try
+                {
+                    using var doc = JsonDocument.Parse(infoResponse);
+                    var root = doc.RootElement;
+
+                    if (root.TryGetProperty("Version", out var version))
+                        instance.Version = version.GetString() ?? "Unknown";
+
+                    if (root.TryGetProperty("Mode", out var mode))
+                        instance.Mode = mode.GetString() ?? "Unknown";
+
+                    if (root.TryGetProperty("Name", out var name))
+                        instance.Name = name.GetString() ?? "Unknown Bot";
+
+                    // Determine bot type from response
+                    if (root.TryGetProperty("BotType", out var botType))
+                    {
+                        instance.BotType = botType.GetString() ?? "Unknown";
+                    }
+                    else
+                    {
+                        // Try to determine from other fields
+                        var nameStr = instance.Name.ToLowerInvariant();
+                        if (nameStr.Contains("raid") || nameStr.Contains("sv"))
+                            instance.BotType = "RaidBot";
+                        else if (nameStr.Contains("poke"))
+                            instance.BotType = "PokeBot";
+                        else
+                            instance.BotType = "Unknown";
+                    }
+                }
+                catch
+                {
+                    // If JSON parsing fails, keep defaults
+                }
+            }
+
+            // Get bot count
+            var botsResponse = QueryRemote(port, "LISTBOTS");
+            if (botsResponse.StartsWith("{") && botsResponse.Contains("Bots"))
+            {
+                try
+                {
+                    var botsData = JsonSerializer.Deserialize<Dictionary<string, List<BotInfo>>>(botsResponse);
+                    if (botsData?.ContainsKey("Bots") == true)
+                    {
+                        instance.BotCount = botsData["Bots"].Count;
+                        instance.BotStatuses = [.. botsData["Bots"].Select(b => new BotStatusInfo
+                        {
+                            Name = b.Name,
+                            Status = b.Status
+                        })];
+                    }
+                }
+                catch
+                {
+                    // Ignore JSON parsing errors
+                }
             }
 
             return instance;
@@ -622,51 +863,13 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         }
     }
 
-    private static void UpdateInstanceInfo(BotInstance instance, int port)
-    {
-        try
-        {
-            var infoResponse = QueryRemote(port, "INFO");
-            if (infoResponse.StartsWith("{"))
-            {
-                using var doc = JsonDocument.Parse(infoResponse);
-                var root = doc.RootElement;
-
-                if (root.TryGetProperty("Version", out var version))
-                    instance.Version = version.GetString() ?? "Unknown";
-
-                if (root.TryGetProperty("Mode", out var mode))
-                    instance.Mode = mode.GetString() ?? "Unknown";
-
-                if (root.TryGetProperty("Name", out var name))
-                    instance.Name = name.GetString() ?? "PokeBot";
-            }
-
-            var botsResponse = QueryRemote(port, "LISTBOTS");
-            if (botsResponse.StartsWith("{") && botsResponse.Contains("Bots"))
-            {
-                var botsData = JsonSerializer.Deserialize<Dictionary<string, List<BotInfo>>>(botsResponse);
-                if (botsData?.ContainsKey("Bots") == true)
-                {
-                    instance.BotCount = botsData["Bots"].Count;
-                    instance.BotStatuses = [.. botsData["Bots"].Select(b => new BotStatusInfo
-                    {
-                        Name = b.Name,
-                        Status = b.Status
-                    })];
-                }
-            }
-        }
-        catch { }
-    }
-
     private static bool IsPortOpen(int port)
     {
         try
         {
             using var client = new TcpClient();
             var result = client.BeginConnect("127.0.0.1", port, null, null);
-            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(1));
+            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(100));
             if (success)
             {
                 client.EndConnect(result);
@@ -834,6 +1037,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
             "resume" => BotControlCommand.Resume,
             "restart" => BotControlCommand.Restart,
             "reboot" => BotControlCommand.RebootAndStop,
+            "refreshmap" => BotControlCommand.RefreshMap,
             "screenon" => BotControlCommand.ScreenOnAll,
             "screenoff" => BotControlCommand.ScreenOffAll,
             _ => BotControlCommand.None
@@ -913,6 +1117,7 @@ public class BotInstance
     public bool IsOnline { get; set; }
     public bool IsMaster { get; set; }
     public List<BotStatusInfo>? BotStatuses { get; set; }
+    public string BotType { get; set; } = "Unknown";
 }
 
 public class BotStatusInfo

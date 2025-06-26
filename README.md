@@ -187,3 +187,91 @@ This is helpful if your bot is in several servers and you need to let everyone k
 
 - [Source Code](https://github.com/bdawg1989/SysBot)
 
+---
+
+# 🚀 Universal Bot Controller
+
+This RaidBot project now supports the **Universal Bot Controller System**, enabling management of both RaidBot and PokeBot through a single web interface.
+
+## ✨ Features
+
+### 🔄 Master-Slave Architecture
+- First started bot instance becomes the **Master** (Web server on port 8080)
+- Additional instances are automatically detected as **Slaves**
+- Works with any combination of RaidBot and PokeBot
+
+### 🌐 Unified Web Interface
+- Access via `http://localhost:8080/` regardless of which bot starts first
+- Visually distinguishable bot types:
+  - ⚔️ **RaidBot** (purple highlighted)
+  - 🎮 **PokeBot** (green highlighted)
+- Automatic bot type detection and display
+
+### ⚡ Universal Commands
+- **Start All** - Starts all bots of all types
+- **Stop All** - Stops all bots of all types
+- **Idle All** - Sets all bots to idle mode
+- **Refresh Map All** - RaidBot-specific function for all RaidBot instances
+
+### 🗺️ RaidBot-Specific Features
+- **Refresh Map** button only visible for RaidBot instances
+- Automatic raid map refresh across all RaidBot instances
+- RaidBot-specific update system
+
+### 🔧 Bot-Specific Features
+- Separate update systems for RaidBot and PokeBot from their respective repositories
+- Bot-specific functions are automatically enabled/disabled
+- Intelligent command routing based on bot type
+
+## 🚀 Usage
+
+### Single RaidBot:
+1. Start `SVRaidBot.exe`
+2. Open `http://localhost:8080/` (Port changed from 9090 to 8080 for compatibility)
+3. Manage your RaidBot instances
+
+### Mixed Bot Environment:
+1. Start any combination of RaidBot and PokeBot
+2. The first started bot takes over the web server role
+3. All subsequent bots are automatically detected
+4. Manage all bots through a single interface at `http://localhost:8080/`
+
+### Network Access for Universal Controller:
+```cmd
+# Admin permission for all bot types (Port 8080 instead of 9090)
+netsh http add urlacl url=http://+:8080/ user=Everyone
+
+# Firewall rule for Universal Controller (Port 8080 instead of 9090)
+netsh advfirewall firewall add rule name="Universal Bot Controller" dir=in action=allow protocol=TCP localport=8080
+```
+
+## 🔧 Technical Details
+
+### Port Standardization
+- **IMPORTANT**: RaidBot now uses **Port 8080/8081** instead of 9090/9091 for compatibility
+- Automatic collision detection and master-slave assignment
+- Cross-bot communication via port files
+
+### Bot Type Detection
+- Automatic detection via Reflection:
+  - RaidBot: `SysBot.Pokemon.SV.BotRaid.Helpers.SVRaidBot`
+  - PokeBot: `SysBot.Pokemon.Helpers.PokeBot`
+
+### Update Management
+- RaidBot: Updates from RaidBot repository
+- PokeBot: Updates from PokeBot repository
+- Automatic repository detection based on bot type
+
+### RaidBot-Specific Functions
+- Refresh Map functionality is preserved
+- Automatic detection and activation of raid-specific features
+- Compatibility with all existing RaidBot configurations
+
+## 📱 Mobile Access Update
+
+Since the port changed from 9090 to 8080, now use:
+- **New URL**: `http://YOUR-PC-IP:8080` (instead of 9090)
+- **Example**: `http://192.168.1.100:8080`
+
+The Universal Bot Controller System makes managing multiple bot instances of different types easier than ever! 🎉
+
