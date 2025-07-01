@@ -468,8 +468,13 @@ namespace SysBot.Pokemon
             [DisplayName("Screenshot Timing")]
             public ScreenshotTimingOptions ScreenshotTiming { get; set; } = ScreenshotTimingOptions._3500;
 
-            [Category(FeatureToggle), Description("When enabled, the bot will hide the raid code from the Discord embed.")]
-            public bool HideRaidCode { get; set; } = false;
+            [Category(FeatureToggle), Description("Choose whether raid codes should be displayed in uppercase or lowercase letters.")]
+            [DisplayName("Raid Code Letter Case")]
+            public RaidCodeCaseOptions RaidCodeCase { get; set; } = RaidCodeCaseOptions.Lowercase;
+
+            [Category(FeatureToggle), Description("When enabled, the bot will hide the raid code from the Discord embed and screenshots. When disabled, shows raid code like the old system.")]
+            [DisplayName("Hide Raid Code from Embed?")]
+            public bool HideRaidCode { get; set; } = true; // Reactions to get Raid Codes sent via DM 
         }
 
         [Category("MysteryRaids"), TypeConverter(typeof(ExpandableObjectConverter))]
@@ -618,10 +623,6 @@ namespace SysBot.Pokemon
             [Category(FeatureToggle), Description("Extra time in milliseconds to wait before changing partypk.")]
             [DisplayName("Extra Time to Prepare Raid Battler")]
             public int ExtraTimePartyPK { get; set; } = 0;
-
-            [Category(Hosting), Description("Choose whether raid codes should be displayed in uppercase or lowercase letters.")]
-            [DisplayName("Raid Code Letter Case")]
-            public RaidCodeCaseOptions RaidCodeCase { get; set; } = RaidCodeCaseOptions.Lowercase;
         }
 
         [Category(Hosting), TypeConverter(typeof(CategoryConverter<MiscSettingsCategory>))]

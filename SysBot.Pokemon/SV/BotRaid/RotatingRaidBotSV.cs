@@ -2339,7 +2339,7 @@ namespace SysBot.Pokemon.SV.BotRaid
         {
             var data = await SwitchConnection.PointerPeek(6, Offsets.TeraRaidCodePointer, token).ConfigureAwait(false);
             var code = Encoding.ASCII.GetString(data);
-            _teraRaidCode = _settings.LobbyOptions.RaidCodeCase == RaidCodeCaseOptions.Uppercase
+            _teraRaidCode = _settings.EmbedToggles.RaidCodeCase == RaidCodeCaseOptions.Uppercase
                 ? code.ToUpper()
                 : code.ToLower();
             return $"{_teraRaidCode}";
@@ -2877,10 +2877,20 @@ namespace SysBot.Pokemon.SV.BotRaid
             // Define a condition for raid starting embeds with countdown 
             bool isRaidStartingWithCountdown = (isRaidStartingEmbed || (!disband && names is null && !upnext && !raidstart && _settings.EmbedToggles.IncludeCountdown));
 
+            // Modify screenshot logic to allow screenshots when showing raid code
+            bool shouldTakeScreenshot = _settings.EmbedToggles.TakeScreenshot && !upnext &&
+                (!isRaidStartingWithCountdown || (!_settings.EmbedToggles.HideRaidCode && code != "Free For All"));
+
             if (!disband && names is not null && !upnext && _settings.EmbedToggles.TakeScreenshot)
             {
                 try
                 {
+                    // If we're showing the raid code, wait for it to appear on screen
+                    if (!_settings.EmbedToggles.HideRaidCode && code != "Free For All")
+                    {
+                        await Task.Delay((int)_settings.EmbedToggles.ScreenshotTiming, token).ConfigureAwait(false);
+                    }
+
                     imageBytes = await SwitchConnection.PixelPeek(token).ConfigureAwait(false) ?? Array.Empty<byte>();
                     fileName = $"raidecho{RotationCount}.jpg";
                 }
@@ -2889,10 +2899,16 @@ namespace SysBot.Pokemon.SV.BotRaid
                     Log($"Error while capturing screenshots: {ex.Message}");
                 }
             }
-            else if (_settings.EmbedToggles.TakeScreenshot && !upnext && !isRaidStartingWithCountdown)
+            else if (shouldTakeScreenshot)
             {
                 try
                 {
+                    // If we're showing the raid code on initial screenshot, wait for it
+                    if (!_settings.EmbedToggles.HideRaidCode && !disband && code != "Free For All")
+                    {
+                        await Task.Delay((int)_settings.EmbedToggles.ScreenshotTiming, token).ConfigureAwait(false);
+                    }
+
                     imageBytes = await SwitchConnection.PixelPeek(token).ConfigureAwait(false) ?? Array.Empty<byte>();
                     fileName = $"raidecho{RotationCount}.jpg";
                 }
@@ -3141,8 +3157,25 @@ namespace SysBot.Pokemon.SV.BotRaid
 
                     embed.AddField(fieldName, fieldValue, true);
                 }
+                else if (!_settings.EmbedToggles.HideRaidCode)
+                {
+                    // Show raid code directly in the embed (old behavior)
+                    string fieldName = _settings.EmbedToggles.IncludeCountdown
+                        ? $"**__{EmbedLanguageManager.GetLocalizedText("Raid Starting", language)}__**:\n**<t:{DateTimeOffset.Now.ToUnixTimeSeconds() + 160}:R>**"
+                        : $"**{EmbedLanguageManager.GetLocalizedText("Waiting in lobby", language)}!**";
+
+                    // Apply raid code case formatting
+                    string displayCode = _settings.EmbedToggles.RaidCodeCase == RaidCodeCaseOptions.Uppercase
+                        ? code.ToUpper()
+                        : code.ToLower();
+
+                    string fieldValue = $"{EmbedLanguageManager.GetLocalizedText("Raid Code", language)}: **{displayCode}**";
+
+                    embed.AddField(fieldName, fieldValue, true);
+                }
                 else
                 {
+                    // Keep current behavior with empty field (reactions will be used)
                     string fieldName = _settings.EmbedToggles.IncludeCountdown
                         ? $"**__{EmbedLanguageManager.GetLocalizedText("Raid Starting", language)}__**:\n**<t:{DateTimeOffset.Now.ToUnixTimeSeconds() + 160}:R>**"
                         : $"**{EmbedLanguageManager.GetLocalizedText("Waiting in lobby", language)}!**";
@@ -3180,10 +3213,10 @@ namespace SysBot.Pokemon.SV.BotRaid
                 embed.WithImageUrl($"attachment://{fileName}");
             }
 
-            // Add raid code information to the embed for new raids that aren't starting yet
-            if (!disband && names is null && !upnext && !raidstart && code != "Free For All")
+            // Only add reaction instructions if HideRaidCode is true
+            if (!disband && names is null && !upnext && !raidstart && code != "Free For All" && _settings.EmbedToggles.HideRaidCode)
             {
-                // Add a field with code information
+                // Add a field with code information for reaction system
                 string fieldName = $"**__{EmbedLanguageManager.GetLocalizedText("Raid Code", language)}__**";
                 string fieldValue = $"{EmbedLanguageManager.GetLocalizedText("React with", language)} ✅ " +
                                   $"{EmbedLanguageManager.GetLocalizedText("to receive the raid code via DM", language)}.\n" +
@@ -3195,14 +3228,15 @@ namespace SysBot.Pokemon.SV.BotRaid
             // Send the embed to all channels and get list of sent messages
             var sentMessages = await EchoUtil.RaidEmbed(imageBytes, fileName, embed);
 
-            // Determine if this is an initial raid announcement with a code
+            // Only use reaction system if HideRaidCode is true
             bool isInitialCodedRaidAnnouncement =
                 sentMessages.Count > 0 &&
                 code != "Free For All" &&
                 names is null &&
                 !upnext &&
                 !raidstart &&
-                !disband;
+                !disband &&
+                _settings.EmbedToggles.HideRaidCode; // Only use reactions if hiding code
 
             if (isInitialCodedRaidAnnouncement)
             {
