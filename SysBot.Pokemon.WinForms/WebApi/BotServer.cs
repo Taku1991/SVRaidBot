@@ -723,10 +723,67 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
 
         try
         {
-            // Only scan ports 8081-8110 for bot instances (reduced range for efficiency)
+            // Scan for PokeBot processes
+            var pokeBotProcesses = Process.GetProcessesByName("PokeBot")
+                .Where(p => p.Id != Environment.ProcessId);
+
+            foreach (var process in pokeBotProcesses)
+            {
+                try
+                {
+                    var instance = TryCreateInstanceFromProcess(process, "PokeBot");
+                    if (instance != null)
+                    {
+                        instances.Add(instance);
+                        currentInstances.Add(instance.Port);
+                        
+                        // Only log new instances
+                        if (!_knownInstances.Contains(instance.Port))
+                        {
+                            LogUtil.LogInfo($"Found new PokeBot instance on port {instance.Port}: {instance.BotType}", "WebServer");
+                            _knownInstances.Add(instance.Port);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore process scan errors
+                }
+            }
+
+            // Scan for RaidBot processes
+            var raidBotProcesses = Process.GetProcessesByName("SysBot")
+                .Where(p => p.Id != Environment.ProcessId);
+
+            foreach (var process in raidBotProcesses)
+            {
+                try
+                {
+                    var instance = TryCreateInstanceFromProcess(process, "RaidBot");
+                    if (instance != null)
+                    {
+                        instances.Add(instance);
+                        currentInstances.Add(instance.Port);
+                        
+                        // Only log new instances
+                        if (!_knownInstances.Contains(instance.Port))
+                        {
+                            LogUtil.LogInfo($"Found new RaidBot instance on port {instance.Port}: {instance.BotType}", "WebServer");
+                            _knownInstances.Add(instance.Port);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore process scan errors
+                }
+            }
+
+            // Port scanning as fallback for missed instances
             for (int port = 8081; port <= 8110; port++)
             {
                 if (port == _tcpPort) continue; // Skip our own port
+                if (currentInstances.Contains(port)) continue; // Skip already found instances
 
                 try
                 {
@@ -861,6 +918,128 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         {
             return null;
         }
+    }
+
+    private static BotInstance? TryCreateInstanceFromProcess(Process process, string botType)
+    {
+        try
+        {
+            var exePath = process.MainModule?.FileName;
+            if (string.IsNullOrEmpty(exePath))
+                return null;
+
+            var exeDir = Path.GetDirectoryName(exePath)!;
+            
+            // Try to find port file for this bot type
+            var portFile = "";
+            if (botType == "PokeBot")
+            {
+                portFile = Path.Combine(exeDir, $"PokeBot_{process.Id}.port");
+            }
+            else if (botType == "RaidBot")
+            {
+                portFile = Path.Combine(exeDir, $"SVRaidBot_{process.Id}.port");
+                if (!File.Exists(portFile))
+                {
+                    // Sometimes RaidBots might also use PokeBot naming
+                    portFile = Path.Combine(exeDir, $"PokeBot_{process.Id}.port");
+                }
+            }
+
+            if (!File.Exists(portFile))
+                return null;
+
+            var portText = File.ReadAllText(portFile).Trim();
+            if (portText.StartsWith("ERROR:") || !int.TryParse(portText, out var port))
+                return null;
+
+            var isOnline = IsPortOpen(port);
+            var instance = new BotInstance
+            {
+                ProcessId = process.Id,
+                Name = botType == "RaidBot" ? "SVRaidBot" : "PokeBot",
+                Port = port,
+                Version = "Unknown",
+                Mode = "Unknown",
+                BotCount = 0,
+                IsOnline = isOnline,
+                BotType = botType
+            };
+
+            if (isOnline)
+            {
+                UpdateInstanceInfo(instance, port);
+            }
+
+            return instance;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void UpdateInstanceInfo(BotInstance instance, int port)
+    {
+        try
+        {
+            var infoResponse = QueryRemote(port, "INFO");
+            if (infoResponse.StartsWith("{"))
+            {
+                using var doc = JsonDocument.Parse(infoResponse);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("Version", out var version))
+                    instance.Version = version.GetString() ?? "Unknown";
+
+                if (root.TryGetProperty("Mode", out var mode))
+                    instance.Mode = mode.GetString() ?? "Unknown";
+
+                if (root.TryGetProperty("Name", out var name))
+                    instance.Name = name.GetString() ?? "Unknown Bot";
+
+                // Try to get BotType from the INFO response
+                if (root.TryGetProperty("BotType", out var botType))
+                {
+                    instance.BotType = botType.GetString() ?? "Unknown";
+                }
+                else
+                {
+                    // Fallback: try to detect from other properties
+                    var versionStr = instance.Version.ToLower();
+                    var nameStr = instance.Name.ToLower();
+                    
+                    if (nameStr.Contains("raid") || versionStr.Contains("raid"))
+                    {
+                        instance.BotType = "RaidBot";
+                        if (instance.Name == "Unknown Bot")
+                            instance.Name = "SVRaidBot";
+                    }
+                    else if (nameStr.Contains("poke") || versionStr.Contains("poke"))
+                    {
+                        instance.BotType = "PokeBot";
+                        if (instance.Name == "Unknown Bot")
+                            instance.Name = "PokeBot";
+                    }
+                }
+            }
+
+            var botsResponse = QueryRemote(port, "LISTBOTS");
+            if (botsResponse.StartsWith("{") && botsResponse.Contains("Bots"))
+            {
+                var botsData = JsonSerializer.Deserialize<Dictionary<string, List<BotInfo>>>(botsResponse);
+                if (botsData?.ContainsKey("Bots") == true)
+                {
+                    instance.BotCount = botsData["Bots"].Count;
+                    instance.BotStatuses = [.. botsData["Bots"].Select(b => new BotStatusInfo
+                    {
+                        Name = b.Name,
+                        Status = b.Status
+                    })];
+                }
+            }
+        }
+        catch { }
     }
 
     private static bool IsPortOpen(int port)

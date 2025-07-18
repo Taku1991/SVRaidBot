@@ -249,6 +249,135 @@
                 background: linear-gradient(135deg, #7c3aed, #9333ea);
         }
 
+        .scheduled-restart-section {
+            background: var(--bg-card);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-xl);
+            border: 1px solid var(--border);
+        }
+
+        .scheduled-restart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+        }
+
+            .scheduled-restart-header h2 {
+                font-size: clamp(1rem, 3vw, 1.2rem);
+                color: var(--text-secondary);
+            }
+
+        .restart-schedule-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+            flex-wrap: wrap;
+        }
+
+        .schedule-toggle {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 48px;
+            height: 24px;
+            cursor: pointer;
+        }
+
+            .toggle-switch input {
+                display: none;
+            }
+
+        .toggle-slider {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-hover);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            transition: all 0.3s ease;
+        }
+
+            .toggle-slider::before {
+                content: '';
+                position: absolute;
+                width: 16px;
+                height: 16px;
+                left: 4px;
+                bottom: 3px;
+                background: var(--text-secondary);
+                border-radius: 50%;
+                transition: all 0.3s ease;
+            }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+            .toggle-switch input:checked + .toggle-slider::before {
+                transform: translateX(24px);
+                background: white;
+            }
+
+        .time-input-group {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .time-input {
+            background: var(--bg-hover);
+            border: 1px solid var(--border);
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-sm) var(--spacing-md);
+            color: var(--text-primary);
+            font-size: 12px;
+            font-family: monospace;
+            width: 100px;
+            transition: all 0.2s ease;
+        }
+
+            .time-input:focus {
+                outline: none;
+                border-color: var(--accent);
+                box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
+            }
+
+            .time-input:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+        .schedule-status {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            padding: var(--spacing-sm);
+            background: var(--bg-hover);
+            border-radius: var(--border-radius-sm);
+        }
+
+            .schedule-status.active {
+                color: var(--success);
+                background: rgba(16, 185, 129, 0.1);
+                border: 1px solid rgba(16, 185, 129, 0.3);
+            }
+
+        .next-restart-time {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
         .instances-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(min(100%, 350px), 1fr));
@@ -1204,6 +1333,29 @@
             </div>
         </header>
         <main class="main">
+            <div class="scheduled-restart-section">
+                <div class="scheduled-restart-header">
+                    <h2>Scheduled Restart</h2>
+                </div>
+                <div class="restart-schedule-controls">
+                    <div class="schedule-toggle">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="schedule-restart-toggle" onchange="toggleScheduledRestart()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <label for="schedule-restart-toggle">Enable daily restart</label>
+                    </div>
+                    <div class="time-input-group">
+                        <label for="restart-time">Time:</label>
+                        <input type="time" id="restart-time" class="time-input" value="00:00" onchange="updateRestartSchedule()">
+                    </div>
+                    <button class="btn btn-warning" onclick="restartAllInstances()">🔄 Restart Now</button>
+                </div>
+                <div id="schedule-status" class="schedule-status" style="display: none;">
+                    <span>⏰</span>
+                    <span>Next restart scheduled for: <span id="next-restart-time" class="next-restart-time">-</span></span>
+                </div>
+            </div>
             <div class="global-controls">
                 <h2>Global Controls - All Instances</h2>
                 <div class="control-buttons">
@@ -2001,100 +2153,100 @@
                 }
 
                 return `
-                            <div class="instance-card ${statusClass} ${botTypeClass}" data-port="${instance.Port}">
-                                    <div class="instance-header">
-                                        <h3 class="instance-title">
-                                        <span class="bot-type-icon ${botTypeClass}">${botIcon}</span>
-                                            ${instance.Name}
-                                            <span class="instance-status-badge ${instanceStatus}">${instanceStatusText}</span>
-                                        </h3>
-                                    <span class="instance-badge ${botTypeClass}">${botTypeName}</span>
-                                    </div>
-                                    <div class="instance-body">
-                                        <div class="instance-info">
-                                            <div class="info-item">
-                                                <span class="info-label">Version</span>
-                                                <span class="info-value">${instance.Version}</span>
-                                            </div>
-                                            <div class="info-item">
-                                                <span class="info-label">Mode</span>
-                                                <span class="info-value">${instance.Mode}</span>
-                                            </div>
-                                            <div class="info-item">
-                                                <span class="info-label">Process ID</span>
-                                                <span class="info-value">${instance.ProcessId}</span>
-                                            </div>
-                                            <div class="info-item">
-                                                <span class="info-label">Connection</span>
-                                                <span class="info-value">${statusIndicator}</span>
-                                            </div>
-                                        </div>
-
-                                        ${instance.BotStatuses && instance.BotStatuses.length > 0 ? `
-                                        <div class="bot-status">
-                                            <div class="info-label" style="margin-bottom: 0.5rem;">BOTS (${instance.BotStatuses.length})</div>
-                                            ${instance.BotStatuses.map((bot, index) => `
-                                                <div class="bot-status-item">
-                                                    <span class="bot-name">
-                                                        <span style="color: ${getStatusColor(bot.Status)};">●</span>
-                                                        <span>${bot.Name || `Bot ${index + 1}`}</span>
-                                                    </span>
-                                                    <span class="bot-state ${getStatusClass(bot.Status)}">${bot.Status}</span>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                        ` : instance.BotCount > 0 ? `
-                                        <div class="bot-status">
-                                            <div class="info-label">BOTS</div>
-                                            <div class="bot-status-item">
-                                                <span class="bot-name">Bot Count: ${instance.BotCount}</span>
-                                                <span class="bot-state">Status Unknown</span>
-                                            </div>
-                                        </div>
-                                        ` : ''}
-
-                                        <div class="instance-controls">
-                                            <button class="action-menu-button" onclick="toggleActionMenu(event, ${instance.Port})" ${!isOnline ? 'disabled' : ''}>
-                                                ⚡ Actions <span style="font-size: 0.75rem;">▼</span>
-                                            </button>
-                                            <div class="action-menu" id="action-menu-${instance.Port}">
-                                                <button class="action-menu-item success" onclick="sendInstanceCommand(${instance.Port}, 'start')">
-                                                    ▶️ Start
-                                                </button>
-                                                <button class="action-menu-item danger" onclick="sendInstanceCommand(${instance.Port}, 'stop')">
-                                                    ⏹️ Stop
-                                                </button>
-                                                <button class="action-menu-item warning" onclick="sendInstanceCommand(${instance.Port}, 'idle')">
-                                                    ⏸️ Idle
-                                                </button>
-                                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'resume')">
-                                                    ⏯️ Resume
-                                                </button>
-                                                <div class="action-menu-divider"></div>
-                                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'restart')">
-                                                    🔄 Restart
-                                                </button>
-                                                <button class="action-menu-item danger" onclick="sendInstanceCommand(${instance.Port}, 'reboot')">
-                                                    🔌 Reboot
-                                                </button>
-                                                <div class="action-menu-divider"></div>
-                                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenon')">
-                                                    💡 Screen On
-                                                </button>
-                                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenoff')">
-                                                    🌙 Screen Off
-                                                </button>
-                                            ${botType === 'RaidBot' ? `
-                                            <div class="action-menu-divider"></div>
-                                            <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'refreshmap')" style="color: #8b5cf6;">
-                                                🗺️ Refresh Map
-                                            </button>
-                                            ` : ''}
-                                            </div>
-                                        </div>
-                                    </div>
+                    <div class="instance-card ${statusClass} ${botTypeClass}" data-port="${instance.Port}">
+                        <div class="instance-header">
+                            <h3 class="instance-title">
+                                <span class="bot-type-icon ${botTypeClass}">${botIcon}</span>
+                                ${instance.Name}
+                                <span class="instance-status-badge ${instanceStatus}">${instanceStatusText}</span>
+                            </h3>
+                            <span class="instance-badge ${botTypeClass}">${botTypeName}</span>
+                        </div>
+                        <div class="instance-body">
+                            <div class="instance-info">
+                                <div class="info-item">
+                                    <span class="info-label">Version</span>
+                                    <span class="info-value">${instance.Version}</span>
                                 </div>
-                            `;
+                                <div class="info-item">
+                                    <span class="info-label">Mode</span>
+                                    <span class="info-value">${instance.Mode}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Process ID</span>
+                                    <span class="info-value">${instance.ProcessId}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Connection</span>
+                                    <span class="info-value">${statusIndicator}</span>
+                                </div>
+                            </div>
+
+                            ${instance.BotStatuses && instance.BotStatuses.length > 0 ? `
+                            <div class="bot-status">
+                                <div class="info-label" style="margin-bottom: 0.5rem;">BOTS (${instance.BotStatuses.length})</div>
+                                ${instance.BotStatuses.map((bot, index) => `
+                                    <div class="bot-status-item">
+                                        <span class="bot-name">
+                                            <span style="color: ${getStatusColor(bot.Status)};">●</span>
+                                            <span>${bot.Name || `Bot ${index + 1}`}</span>
+                                        </span>
+                                        <span class="bot-state ${getStatusClass(bot.Status)}">${bot.Status}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            ` : instance.BotCount > 0 ? `
+                            <div class="bot-status">
+                                <div class="info-label">BOTS</div>
+                                <div class="bot-status-item">
+                                    <span class="bot-name">Bot Count: ${instance.BotCount}</span>
+                                    <span class="bot-state">Status Unknown</span>
+                                </div>
+                            </div>
+                            ` : ''}
+
+                            <div class="instance-controls">
+                                <button class="action-menu-button" onclick="toggleActionMenu(event, ${instance.Port})" ${!isOnline ? 'disabled' : ''}>
+                                    ⚡ Actions <span style="font-size: 0.75rem;">▼</span>
+                                </button>
+                                <div class="action-menu" id="action-menu-${instance.Port}">
+                                    <button class="action-menu-item success" onclick="sendInstanceCommand(${instance.Port}, 'start')">
+                                        ▶️ Start
+                                    </button>
+                                    <button class="action-menu-item danger" onclick="sendInstanceCommand(${instance.Port}, 'stop')">
+                                        ⏹️ Stop
+                                    </button>
+                                    <button class="action-menu-item warning" onclick="sendInstanceCommand(${instance.Port}, 'idle')">
+                                        ⏸️ Idle
+                                    </button>
+                                    <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'resume')">
+                                        ⏯️ Resume
+                                    </button>
+                                    <div class="action-menu-divider"></div>
+                                    <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'restart')">
+                                        🔄 Restart
+                                    </button>
+                                    <button class="action-menu-item danger" onclick="sendInstanceCommand(${instance.Port}, 'reboot')">
+                                        🔌 Reboot
+                                    </button>
+                                    <div class="action-menu-divider"></div>
+                                    <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenon')">
+                                        💡 Screen On
+                                    </button>
+                                    <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenoff')">
+                                        🌙 Screen Off
+                                    </button>
+                                    ${botType === 'RaidBot' ? `
+                                    <div class="action-menu-divider"></div>
+                                    <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'refreshmap')" style="color: #8b5cf6;">
+                                        🗺️ Refresh Map
+                                    </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
             }).join('');
         }
 
@@ -2326,6 +2478,50 @@
                     });
                 }, 300);
             }, 4000);
+        }
+
+        // Scheduled Restart Functions
+        function toggleScheduledRestart() {
+            const toggle = document.getElementById('schedule-restart-toggle');
+            const timeInput = document.getElementById('restart-time');
+            const statusDiv = document.getElementById('schedule-status');
+            
+            timeInput.disabled = !toggle.checked;
+            
+            if (toggle.checked) {
+                updateRestartSchedule();
+            } else {
+                statusDiv.style.display = 'none';
+            }
+        }
+
+        function updateRestartSchedule() {
+            const toggle = document.getElementById('schedule-restart-toggle');
+            const timeInput = document.getElementById('restart-time');
+            const statusDiv = document.getElementById('schedule-status');
+            const nextTimeSpan = document.getElementById('next-restart-time');
+            
+            if (!toggle.checked) return;
+            
+            const [hours, minutes] = timeInput.value.split(':');
+            const now = new Date();
+            const scheduledTime = new Date();
+            scheduledTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+            
+            // If the time has passed today, schedule for tomorrow
+            if (scheduledTime <= now) {
+                scheduledTime.setDate(scheduledTime.getDate() + 1);
+            }
+            
+            nextTimeSpan.textContent = scheduledTime.toLocaleString();
+            statusDiv.style.display = 'flex';
+            statusDiv.classList.add('active');
+        }
+
+        function restartAllInstances() {
+            if (confirm('Are you sure you want to restart all instances? This will stop all running bots temporarily.')) {
+                sendGlobalCommand('restart');
+            }
         }
     </script>
 </body>

@@ -260,7 +260,7 @@ public static class WebApiExtensions
             "STATUS" => GetBotStatuses(botId),
             "ISREADY" => CheckReady(),
             "INFO" => GetInstanceInfo(),
-            "VERSION" => SVRaidBot.Version,
+            "VERSION" => GetVersionForBotType(DetectBotType()),
             "UPDATE" => TriggerUpdate(),
             _ => $"ERROR: Unknown command '{cmd}'"
         };
@@ -273,13 +273,48 @@ public static class WebApiExtensions
             if (_main == null)
                 return "ERROR: Main form not initialized";
 
+            var botType = DetectBotType();
+
             _main.BeginInvoke((MethodInvoker)(async () =>
             {
-                var (updateAvailable, _, newVersion) = await UpdateChecker.CheckForUpdatesAsync(false);
-                if (updateAvailable)
+                try
                 {
-                    var updateForm = new UpdateForm(false, newVersion, true);
-                    updateForm.PerformUpdate();
+                    bool updateAvailable = false;
+                    string newVersion = "";
+
+                    if (botType == BotType.RaidBot)
+                    {
+                        // Use RaidBot UpdateChecker
+                        var (available, _, version) = await UpdateChecker.CheckForUpdatesAsync(false);
+                        updateAvailable = available;
+                        newVersion = version;
+                    }
+                    else if (botType == BotType.PokeBot)
+                    {
+                        // Use PokeBot UpdateChecker
+                        var pokeBotUpdateCheckerType = Type.GetType("SysBot.Pokemon.Helpers.UpdateChecker, SysBot.Pokemon");
+                        if (pokeBotUpdateCheckerType != null)
+                        {
+                            var checkMethod = pokeBotUpdateCheckerType.GetMethod("CheckForUpdatesAsync");
+                            if (checkMethod != null)
+                            {
+                                var task = (Task<(bool, string, string)>)checkMethod.Invoke(null, new object[] { false });
+                                var result = await task;
+                                updateAvailable = result.Item1;
+                                newVersion = result.Item3;
+                            }
+                        }
+                    }
+
+                    if (updateAvailable && !string.IsNullOrEmpty(newVersion))
+                    {
+                        var updateForm = new UpdateForm(false, newVersion, true);
+                        updateForm.PerformUpdate();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogUtil.LogError($"Error in TriggerUpdate: {ex.Message}", "WebAPI");
                 }
             }));
 
@@ -675,6 +710,25 @@ public static class WebApiExtensions
         }
     }
 
+    private static string GetVersionForBotType(BotType botType)
+    {
+        switch (botType)
+        {
+            case BotType.RaidBot:
+                return SVRaidBot.Version;
+            case BotType.PokeBot:
+                var pokeBotType = Type.GetType("SysBot.Pokemon.Helpers.PokeBot, SysBot.Pokemon");
+                if (pokeBotType != null)
+                {
+                    var pokeBot = Activator.CreateInstance(pokeBotType);
+                    return pokeBot?.GetType().Assembly.GetName().Version?.ToString() ?? "N/A";
+                }
+                break;
+            case BotType.Unknown:
+                return "N/A";
+        }
+        return "N/A";
+    }
 
 
     public static string HandleApiRequest(this Main mainForm, string command)
