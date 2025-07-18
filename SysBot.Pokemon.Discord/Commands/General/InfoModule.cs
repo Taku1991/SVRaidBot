@@ -29,7 +29,7 @@ namespace SysBot.Pokemon.Discord
                 return;
             }
             var app = await Context.Client.GetApplicationInfoAsync().ConfigureAwait(false);
-            var programIconUrl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/imgs/icon4.png";
+            var programIconUrl = "https://raw.githubusercontent.com/hexbyt3/sprites/main/imgs/icon4.png";
             var builder = new EmbedBuilder
             {
                 Color = new Color(114, 137, 218),

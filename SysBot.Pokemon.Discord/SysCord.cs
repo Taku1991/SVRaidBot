@@ -276,7 +276,7 @@ namespace SysBot.Pokemon.Discord
                 var embedColor = isShiny ? Color.Gold : Color.Blue;
                 string thumbnailUrl = raidInfoDict?.TryGetValue("ThumbnailUrl", out var thumbUrl) == true && !string.IsNullOrEmpty(thumbUrl)
                     ? thumbUrl
-                    : "https://raw.githubusercontent.com/bdawg1989/sprites/main/imgs/combat.png";
+                    : "https://raw.githubusercontent.com/hexbyt3/sprites/main/imgs/combat.png";
 
                 var embed = new EmbedBuilder()
                 {

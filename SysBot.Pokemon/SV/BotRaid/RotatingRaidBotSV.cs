@@ -996,7 +996,7 @@ namespace SysBot.Pokemon.SV.BotRaid
                 Title = "Bot Reset",
                 Description = "The bot encountered an issue and is currently resetting. Please stand by.",
                 Color = Color.Red,
-                ThumbnailUrl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/imgs/x.png"
+                ThumbnailUrl = "https://raw.githubusercontent.com/hexbyt3/sprites/main/imgs/x.png"
             };
             EchoUtil.RaidEmbed(null, "", embed);
 
@@ -2964,7 +2964,7 @@ namespace SysBot.Pokemon.SV.BotRaid
                 turl = RaidExtensions<PK9>.PokeImg(pk, false, false);
             }
             if (_settings.ActiveRaids[RotationCount].Species is 0)
-                turl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/imgs/combat.png";
+                turl = "https://raw.githubusercontent.com/hexbyt3/sprites/main/imgs/combat.png";
 
             // Fetch the dominant color from the image
             (int R, int G, int B) dominantColor = Task.Run(() => RaidExtensions<PK9>.GetDominantColorAsync(turl)).Result;
@@ -3020,7 +3020,7 @@ namespace SysBot.Pokemon.SV.BotRaid
             // Only include footer if not posting 'upnext' embed with the 'Preparing Raid' title
             if (!(upnext && _settings.RaidSettings.TotalRaidsToHost == 0))
             {
-                string programIconUrl = $"https://raw.githubusercontent.com/bdawg1989/sprites/main/imgs/icon4.png";
+                string programIconUrl = $"https://raw.githubusercontent.com/hexbyt3/sprites/main/imgs/icon4.png";
                 int raidsInRotationCount = _hub.Config.RotatingRaidSV.ActiveRaids.Count(r => !r.AddedByRACommand);
 
                 // Calculate uptime
@@ -3071,7 +3071,7 @@ namespace SysBot.Pokemon.SV.BotRaid
             string teraType = RaidEmbedInfoHelpers.RaidSpeciesTeraType;
             string englishTeraType = GetEnglishTypeNameFromLocalized(teraType).ToLower();
             string folderName = _settings.EmbedToggles.SelectedTeraIconType == TeraIconType.Icon1 ? "icon1" : "icon2";
-            string teraIconUrl = $"https://raw.githubusercontent.com/bdawg1989/sprites/main/teraicons/{folderName}/{englishTeraType}.png";
+            string teraIconUrl = $"https://raw.githubusercontent.com/hexbyt3/sprites/main/teraicons/{folderName}/{englishTeraType}.png";
 
             // Only include author (header) if not posting 'upnext' embed with the 'Preparing Raid' title
             if (!(upnext && _settings.RaidSettings.TotalRaidsToHost == 0))
@@ -3660,9 +3660,11 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
                             Title = "Experiencing Online Connection Issues",
                             Description = "The bot is experiencing issues connecting online. Please stand by as we try to resolve this issue.",
                             Color = Color.Red,
-                            ThumbnailUrl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/imgs/x.png"
+                            ThumbnailUrl = "https://raw.githubusercontent.com/hexbyt3/sprites/main/imgs/x.png"
                         };
-                        _ = await EchoUtil.RaidEmbed(null, "", embed);
+                        
+                        //You should remove the await keyword since EchoUtil.RaidEmbed returns void, and replace null with an empty byte array to satisfy the non-nullable parameter.
+                        EchoUtil.RaidEmbed([], "", embed);
 
                         await Click(B, 0_500, token).ConfigureAwait(false);
                         await Click(B, 0_500, token).ConfigureAwait(false);
@@ -3703,6 +3705,13 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
                     // Back out for next attempt if needed
                     if (attemptCount < maxAttempts && !connected)
                         await Click(B, 0_500, token).ConfigureAwait(false);
+                    
+                    // If attemptCount 1 fails, press A to try to get past the splash screen. If this is set to 2 it will connect just in time on attempt 5 (Tested implementation, 1 works the best) 
+                    if (attemptCount == 1)
+                    {
+                        Log("Pressing A in case our switch is at the splash screen, and not in overworld.");
+                        await Click(A, 0_500, token).ConfigureAwait(false); // Press A to try to get past the splash screen
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -4734,7 +4743,7 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
 
             // Build the embed
             var teraTypeLower = strings.Types[teraType].ToLower();
-            var teraIconUrl = $"https://raw.githubusercontent.com/bdawg1989/sprites/main/teraicons/icon1/{teraTypeLower}.png";
+            var teraIconUrl = $"https://raw.githubusercontent.com/hexbyt3/sprites/main/teraicons/icon1/{teraTypeLower}.png";
             var disclaimer = $"Current Position: {queuePosition}";
             var titlePrefix = raid.IsShiny ? "Shiny " : "";
             var formName = ShowdownParsing.GetStringFromForm(pk.Form, strings, pk.Species, pk.Context);
@@ -4783,7 +4792,7 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
                 embed.AddField("**__Special Rewards__**", "No special rewards available", true);
             }
 
-            var programIconUrl = "https://raw.githubusercontent.com/bdawg1989/sprites/main/imgs/icon4.png";
+            var programIconUrl = "https://raw.githubusercontent.com/hexbyt3/sprites/main/imgs/icon4.png";
             embed.WithFooter(new EmbedFooterBuilder()
             {
                 Text = disclaimer,
