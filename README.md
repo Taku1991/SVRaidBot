@@ -275,3 +275,201 @@ Since the port changed from 9090 to 8080, now use:
 
 The Universal Bot Controller System makes managing multiple bot instances of different types easier than ever! 🎉
 
+---
+
+# 🌐 Tailscale Multi-Node Management
+
+Take your bot management to the next level with **Tailscale** integration! Manage bot instances across multiple computers/servers through a single web interface.
+
+## ✨ What is Tailscale Integration?
+
+Tailscale allows you to create a secure mesh network between your devices, enabling the Universal Bot Controller to manage bots running on different computers across the internet as if they were on the same local network.
+
+### 🔑 Key Benefits
+- **Remote Management**: Control bots on multiple computers from one dashboard
+- **Secure**: Encrypted mesh network via Tailscale
+- **Automatic Discovery**: Master node automatically finds and manages remote bots
+- **Load Distribution**: Run bots on multiple machines for better performance
+- **Geographic Distribution**: Place bots closer to different regions
+
+## 🚀 Setup Guide
+
+### 1. Install Tailscale
+1. Install [Tailscale](https://tailscale.com/) on all computers you want to connect
+2. Log in with the same Tailscale account on all devices
+3. Note the Tailscale IP addresses of each device (usually `100.x.x.x`)
+
+### 2. Configure Master Node
+The **Master Node** runs the web dashboard and manages all other nodes:
+
+```json
+{
+  "Hub": {
+    "Tailscale": {
+      "Enabled": true,
+      "IsMasterNode": true,
+      "MasterNodeIP": "100.x.x.x",
+      "RemoteNodes": [
+        "100.x.x.x",
+        "100.x.x.x"
+      ],
+      "PortScanStart": 8081,
+      "PortScanEnd": 8110,
+      "PortAllocation": {
+        "Enabled": true,
+        "NodeAllocations": {
+          "100.x.x.x": { "Start": 8081, "End": 8090 },
+          "100.x.x.x": { "Start": 8091, "End": 8100 },
+          "100.x.x.x": { "Start": 8101, "End": 8110 }
+        }
+      }
+    }
+  }
+}
+```
+
+### 3. Configure Slave Nodes
+**Slave Nodes** run bots and report to the master:
+
+```json
+{
+  "Hub": {
+    "Tailscale": {
+      "Enabled": true,
+      "IsMasterNode": false,
+      "MasterNodeIP": "100.x.x.x",
+      "RemoteNodes": [],
+      "PortScanStart": 8091,
+      "PortScanEnd": 8100
+    }
+  }
+}
+```
+
+## ⚙️ Configuration Details
+
+### Tailscale Settings
+
+| Setting | Description | Master Node | Slave Node |
+|---------|-------------|-------------|------------|
+| `Enabled` | Enable Tailscale integration | `true` | `true` |
+| `IsMasterNode` | Is this the master dashboard? | `true` | `false` |
+| `MasterNodeIP` | Tailscale IP of master node | Own IP | Master's IP |
+| `RemoteNodes` | List of slave node IPs | All slave IPs | `[]` (empty) |
+| `PortScanStart` | Start of port scan range | `8081` | Your range start |
+| `PortScanEnd` | End of port scan range | `8110` | Your range end |
+
+### Port Allocation System
+
+The port allocation system prevents conflicts when running multiple bot instances across nodes:
+
+```json
+"PortAllocation": {
+  "Enabled": true,
+  "NodeAllocations": {
+    "100.x.x.x": { "Start": 8081, "End": 8090 },  // Master: 10 ports
+    "100.x.x.x": { "Start": 8091, "End": 8100 },  // Slave 1: 10 ports  
+    "100.x.x.x": { "Start": 8101, "End": 8110 }    // Slave 2: 10 ports
+  }
+}
+```
+
+## 🎯 Usage Examples
+
+### Basic 2-Node Setup
+**Computer 1 (Master)** - Main gaming PC:
+- Tailscale IP: `100.x.x.x`
+- Runs web dashboard on port 8080
+- Manages 5 local bots on ports 8081-8085
+
+**Computer 2 (Slave)** - Dedicated server:
+- Tailscale IP: `100.x.x.x`  
+- Runs 10 bots on ports 8091-8100
+- No local web interface needed
+
+**Access**: Go to `http://100.x.x.x:8080` from any device on your Tailscale network
+
+### Advanced Multi-Node Setup
+**Server Farm Configuration**:
+- **Master Node**: Dashboard + 5 bots (ports 8081-8085)
+- **Slave Node 1**: 10 PokeBot instances (ports 8091-8100)
+- **Slave Node 2**: 10 RaidBot instances (ports 8101-8110)
+- **Slave Node 3**: Additional capacity (ports 8111-8120)
+
+## 🔧 Network Requirements
+
+### Firewall Configuration
+Each node needs appropriate firewall rules:
+
+```cmd
+# Allow Tailscale traffic (usually automatic)
+# Allow bot TCP ports
+netsh advfirewall firewall add rule name="Bot Ports" dir=in action=allow protocol=TCP localport=8081-8110
+
+# Master node also needs web server port
+netsh advfirewall firewall add rule name="Bot Dashboard" dir=in action=allow protocol=TCP localport=8080
+```
+
+### Port Planning
+- **Web Dashboard**: 8080 (master node only)
+- **Bot Instances**: 8081+ (configurable ranges per node)
+- **Tailscale**: Automatic (usually UDP 41641)
+
+## 📊 Dashboard Features
+
+### Multi-Node View
+The master dashboard displays all nodes with:
+- **Node Status**: Online/Offline indicators
+- **Bot Counts**: Total bots per node
+- **Performance**: Individual bot statuses
+- **Commands**: Send commands to specific nodes or all nodes
+
+### Global Commands
+- **Start All**: Starts bots on all connected nodes
+- **Stop All**: Stops bots across the entire network
+- **Update All**: Updates bot software on all nodes
+- **Restart All**: Restarts all bot instances network-wide
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+**Bots not discovered on remote nodes:**
+1. Verify Tailscale connectivity: `ping 100.x.x.x`
+2. Check firewall rules on target node
+3. Ensure port ranges don't overlap
+4. Verify JSON configuration syntax
+
+**Connection timeouts:**
+1. Check if ports are in use: `netstat -an | findstr :8081`
+2. Verify bot is actually running on expected port
+3. Test manual connection: `telnet 100.x.x.x 8081`
+
+**Master node not starting:**
+1. Ensure `IsMasterNode: true` is set
+2. Check that port 8080 is available
+3. Verify admin permissions for network access
+
+### Debug Information
+Enable verbose logging to troubleshoot:
+- Check Windows Event Logs
+- Monitor bot console output
+- Use `telnet` to test TCP connectivity
+- Verify Tailscale status with `tailscale status`
+
+## 🚨 Security Considerations
+
+### Network Security
+- Tailscale provides encrypted mesh networking
+- Only devices on your Tailscale network can access the dashboard
+- Consider using Tailscale ACLs for additional security
+- Regularly review connected devices in Tailscale admin panel
+
+### Access Control
+- Web dashboard has no built-in authentication
+- Rely on Tailscale network-level security
+- Consider additional reverse proxy with authentication if needed
+- Monitor access logs for suspicious activity
+
+The Tailscale integration transforms your bot network into a powerful distributed system! 🚀
+

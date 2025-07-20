@@ -1,7 +1,7 @@
 ﻿using PKHeX.Core;
 using SysBot.Base;
 using SysBot.Pokemon.SV.BotRaid.Helpers;
-using SysBot.Web;
+// using SysBot.Web;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -120,7 +120,7 @@ namespace SysBot.Pokemon.WinForms
             InitUtil.InitializeStubs(Config.Mode);
             
             // Starte die Web-API
-            WebApiIntegration.StartWebApi(RunningEnvironment, 6500);
+            // WebApiIntegration.StartWebApi(RunningEnvironment, 6500);
 
             // Start periodic update checks
             StartUpdateCheckTimer();

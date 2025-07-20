@@ -182,7 +182,7 @@ public static class WebApiExtensions
         {
             try
             {
-                _tcp = new TcpListener(System.Net.IPAddress.Loopback, _tcpPort);
+                _tcp = new TcpListener(System.Net.IPAddress.Any, _tcpPort);
                 _tcp.Start();
 
                 while (!_cts.Token.IsCancellationRequested)

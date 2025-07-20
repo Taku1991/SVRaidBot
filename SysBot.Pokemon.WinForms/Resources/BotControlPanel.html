@@ -441,6 +441,42 @@
             gap: var(--spacing-sm);
             min-width: 0;
             flex: 1;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .instance-name {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .instance-location {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .remote-indicator {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .master-indicator {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .bot-type-icon {
@@ -2152,13 +2188,31 @@
                     }
                 }
 
+                // Generate location information
+                const locationInfo = instance.IP && instance.IP !== '127.0.0.1' ? 
+                    `${instance.IP}:${instance.Port}` : 
+                    `localhost:${instance.Port}`;
+                
+                // Generate role indicators
+                const roleIndicators = [];
+                if (instance.IsMaster) {
+                    roleIndicators.push('<span class="master-indicator">Master</span>');
+                }
+                if (instance.IsRemote) {
+                    roleIndicators.push('<span class="remote-indicator">Remote</span>');
+                }
+
                 return `
-                    <div class="instance-card ${statusClass} ${botTypeClass}" data-port="${instance.Port}">
+                    <div class="instance-card ${statusClass} ${botTypeClass}" data-port="${instance.Port}" data-ip="${instance.IP || '127.0.0.1'}">
                         <div class="instance-header">
                             <h3 class="instance-title">
-                                <span class="bot-type-icon ${botTypeClass}">${botIcon}</span>
-                                ${instance.Name}
-                                <span class="instance-status-badge ${instanceStatus}">${instanceStatusText}</span>
+                                <div class="instance-name">
+                                    <span class="bot-type-icon ${botTypeClass}">${botIcon}</span>
+                                    ${instance.Name}
+                                    ${roleIndicators.join('')}
+                                    <span class="instance-status-badge ${instanceStatus}">${instanceStatusText}</span>
+                                </div>
+                                <div class="instance-location">${locationInfo}</div>
                             </h3>
                             <span class="instance-badge ${botTypeClass}">${botTypeName}</span>
                         </div>
@@ -2175,6 +2229,14 @@
                                 <div class="info-item">
                                     <span class="info-label">Process ID</span>
                                     <span class="info-value">${instance.ProcessId}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">IP Address</span>
+                                    <span class="info-value">${instance.IP || '127.0.0.1'}</span>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-label">Port</span>
+                                    <span class="info-value">${instance.Port}</span>
                                 </div>
                                 <div class="info-item">
                                     <span class="info-label">Connection</span>
@@ -2210,37 +2272,37 @@
                                     ⚡ Actions <span style="font-size: 0.75rem;">▼</span>
                                 </button>
                                 <div class="action-menu" id="action-menu-${instance.Port}">
-                                    <button class="action-menu-item success" onclick="sendInstanceCommand(${instance.Port}, 'start')">
-                                        ▶️ Start
-                                    </button>
-                                    <button class="action-menu-item danger" onclick="sendInstanceCommand(${instance.Port}, 'stop')">
-                                        ⏹️ Stop
-                                    </button>
-                                    <button class="action-menu-item warning" onclick="sendInstanceCommand(${instance.Port}, 'idle')">
-                                        ⏸️ Idle
-                                    </button>
-                                    <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'resume')">
-                                        ⏯️ Resume
-                                    </button>
-                                    <div class="action-menu-divider"></div>
-                                    <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'restart')">
-                                        🔄 Restart
-                                    </button>
-                                    <button class="action-menu-item danger" onclick="sendInstanceCommand(${instance.Port}, 'reboot')">
-                                        🔌 Reboot
-                                    </button>
-                                    <div class="action-menu-divider"></div>
-                                    <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenon')">
-                                        💡 Screen On
-                                    </button>
-                                    <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenoff')">
-                                        🌙 Screen Off
-                                    </button>
-                                    ${botType === 'RaidBot' ? `
-                                    <div class="action-menu-divider"></div>
-                                    <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'refreshmap')" style="color: #8b5cf6;">
-                                        🗺️ Refresh Map
-                                    </button>
+                                                <button class="action-menu-item success" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'start')">
+                                                    ▶️ Start
+                                                </button>
+                                                <button class="action-menu-item danger" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'stop')">
+                                                    ⏹️ Stop
+                                                </button>
+                                                <button class="action-menu-item warning" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'idle')">
+                                                    ⏸️ Idle
+                                                </button>
+                                                <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'resume')">
+                                                    ⏯️ Resume
+                                                </button>
+                                                <div class="action-menu-divider"></div>
+                                                <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'restart')">
+                                                    🔄 Restart
+                                                </button>
+                                                <button class="action-menu-item danger" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'reboot')">
+                                                    🔌 Reboot
+                                                </button>
+                                                <div class="action-menu-divider"></div>
+                                                <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'screenon')">
+                                                    💡 Screen On
+                                                </button>
+                                                <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'screenoff')">
+                                                    🌙 Screen Off
+                                                </button>
+                                                ${botType === 'RaidBot' ? `
+                                                <div class="action-menu-divider"></div>
+                                                <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'refreshmap')" style="color: #8b5cf6;">
+                                                    🗺️ Refresh Map
+                                                </button>
                                     ` : ''}
                                 </div>
                             </div>
@@ -2369,17 +2431,17 @@
             }
         }
 
-        async function sendInstanceCommand(port, command) {
+        async function sendInstanceCommand(ip, port, command) {
             // Close action menu
             document.getElementById(`action-menu-${port}`).classList.remove('show');
 
             // Clear interaction state
             isInteracting = false;
 
-            showToast('info', 'Sending Command', `Sending ${command} to instance on port ${port}...`);
+            showToast('info', 'Sending Command', `Sending ${command} to instance on ${ip}:${port}...`);
 
             try {
-                const response = await fetch(`${API_BASE}/instances/${port}/command`, {
+                const response = await fetch(`${API_BASE}/instances/${ip}:${port}/command`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ Command: command })
@@ -2389,15 +2451,15 @@
 
                 const result = await response.json();
                 if (result.Success) {
-                    showToast('success', 'Command Sent', `Successfully sent ${command} to instance on port ${port}`);
+                    showToast('success', 'Command Sent', `Successfully sent ${command} to instance ${ip}:${port}`);
                 } else {
                     showToast('error', 'Command Failed', result.Message || 'Unknown error');
                 }
 
                 setTimeout(() => refreshInstances(true), 1000);
             } catch (error) {
-                console.error(`Error sending command to port ${port}:`, error);
-                showToast('error', 'Error', `Failed to send command to instance on port ${port}`);
+                console.error(`Error sending command to ${ip}:${port}:`, error);
+                showToast('error', 'Error', `Failed to send command to instance ${ip}:${port}`);
             }
         }
 

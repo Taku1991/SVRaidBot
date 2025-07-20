@@ -30,5 +30,9 @@ namespace SysBot.Pokemon
         [Category(Integration)]
         [TypeConverter(typeof(ExpandableObjectConverter))]
         public DiscordSettings Discord { get; set; } = new();
+
+        [Category(Integration), Description("Settings for Tailscale network integration and multi-node bot management.")]
+        [TypeConverter(typeof(ExpandableObjectConverter))]
+        public TailscaleSettings Tailscale { get; set; } = new();
     }
 }
