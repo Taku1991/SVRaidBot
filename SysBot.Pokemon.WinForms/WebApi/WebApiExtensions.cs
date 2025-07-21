@@ -213,8 +213,8 @@ public static class WebApiExtensions
         {
             using (client)
             {
-                client.ReceiveTimeout = 5000;
-                client.SendTimeout = 5000;
+                client.ReceiveTimeout = 1000;  // Reduziert von 5s auf 1s
+                client.SendTimeout = 1000;   // Reduziert von 5s auf 1s
 
                 using var stream = client.GetStream();
                 using var reader = new StreamReader(stream, Encoding.UTF8);
@@ -226,7 +226,7 @@ public static class WebApiExtensions
                     var response = ProcessCommand(command);
                     await writer.WriteLineAsync(response);
                     await stream.FlushAsync();
-                    await Task.Delay(100);
+                    // await Task.Delay(100); // Entfernt für bessere Performance
                 }
             }
         }
@@ -285,25 +285,16 @@ public static class WebApiExtensions
                     if (botType == BotType.RaidBot)
                     {
                         // Use RaidBot UpdateChecker
-                        var (available, _, version) = await UpdateChecker.CheckForUpdatesAsync(false);
+                        var (available, _, version) = await RaidBotUpdateChecker.CheckForUpdatesAsync(false);
                         updateAvailable = available;
                         newVersion = version;
                     }
                     else if (botType == BotType.PokeBot)
                     {
                         // Use PokeBot UpdateChecker
-                        var pokeBotUpdateCheckerType = Type.GetType("SysBot.Pokemon.Helpers.UpdateChecker, SysBot.Pokemon");
-                        if (pokeBotUpdateCheckerType != null)
-                        {
-                            var checkMethod = pokeBotUpdateCheckerType.GetMethod("CheckForUpdatesAsync");
-                            if (checkMethod != null)
-                            {
-                                var task = (Task<(bool, string, string)>)checkMethod.Invoke(null, new object[] { false });
-                                var result = await task;
-                                updateAvailable = result.Item1;
-                                newVersion = result.Item3;
-                            }
-                        }
+                        var (available, _, version) = await PokeBotUpdateChecker.CheckForUpdatesAsync(false);
+                        updateAvailable = available;
+                        newVersion = version;
                     }
 
                     if (updateAvailable && !string.IsNullOrEmpty(newVersion))

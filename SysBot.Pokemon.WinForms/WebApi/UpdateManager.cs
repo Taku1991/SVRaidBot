@@ -6,7 +6,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using SysBot.Base;
-using SysBot.Pokemon.SV.BotRaid.Helpers;
 
 namespace SysBot.Pokemon.WinForms.WebApi;
 
@@ -616,22 +615,13 @@ public static class UpdateManager
     {
         try
         {
-            var pokeBotUpdateCheckerType = Type.GetType("SysBot.Pokemon.Helpers.UpdateChecker, SysBot.Pokemon");
-            if (pokeBotUpdateCheckerType != null)
-            {
-                var checkMethod = pokeBotUpdateCheckerType.GetMethod("CheckForUpdatesAsync");
-                if (checkMethod != null)
-                {
-                    var task = (Task<(bool, string, string)>)checkMethod.Invoke(null, new object[] { false });
-                    var (_, _, latestVersion) = await task;
-                    return latestVersion;
-                }
-            }
-            return "";
+            var (updateAvailable, _, latestVersion) = await PokeBotUpdateChecker.CheckForUpdatesAsync(false);
+            return updateAvailable ? latestVersion ?? "Unknown" : "Unknown";
         }
-        catch
+        catch (Exception ex)
         {
-            return "";
+            LogUtil.LogError($"Error getting latest PokeBot version: {ex.Message}", "UpdateManager");
+            return "Unknown";
         }
     }
 
@@ -639,12 +629,13 @@ public static class UpdateManager
     {
         try
         {
-            var (_, _, latestVersion) = await UpdateChecker.CheckForUpdatesAsync(false);
-            return latestVersion;
+            var (updateAvailable, _, latestVersion) = await RaidBotUpdateChecker.CheckForUpdatesAsync(false);
+            return updateAvailable ? latestVersion ?? "Unknown" : "Unknown";
         }
-        catch
+        catch (Exception ex)
         {
-            return "";
+            LogUtil.LogError($"Error getting latest RaidBot version: {ex.Message}", "UpdateManager");
+            return "Unknown";
         }
     }
 
@@ -688,7 +679,7 @@ public static class UpdateManager
         {
             using var client = new System.Net.Sockets.TcpClient();
             var result = client.BeginConnect("127.0.0.1", port, null, null);
-            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(1));
+            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(200)); // Reduziert von 1s auf 200ms
             if (success)
             {
                 client.EndConnect(result);

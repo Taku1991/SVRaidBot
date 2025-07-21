@@ -502,11 +502,12 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
     {
         try
         {
-            // Fallback for PokeBot - this wouldn't actually be called for RaidBot
-            return (false, "", "Unknown");
+            var (updateAvailable, _, newVersion) = await PokeBotUpdateChecker.CheckForUpdatesAsync(false);
+            return (updateAvailable, "", newVersion);
         }
-        catch
+        catch (Exception ex)
         {
+            LogUtil.LogError($"Error checking PokeBot updates: {ex.Message}", "BotServer");
             return (false, "", "Unknown");
         }
     }
@@ -515,11 +516,12 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
     {
         try
         {
-            var result = await UpdateChecker.CheckForUpdatesAsync(false);
-            return (result.UpdateAvailable, "", result.NewVersion);
+            var (updateAvailable, _, newVersion) = await RaidBotUpdateChecker.CheckForUpdatesAsync(false);
+            return (updateAvailable, "", newVersion);
         }
-        catch
+        catch (Exception ex)
         {
+            LogUtil.LogError($"Error checking RaidBot updates: {ex.Message}", "BotServer");
             return (false, "", "Unknown");
         }
     }
@@ -531,12 +533,13 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
             return botType switch
             {
                 BotType.PokeBot => await FetchPokeBotChangelog(),
-                BotType.RaidBot => await UpdateChecker.FetchChangelogAsync(),
+                BotType.RaidBot => await RaidBotUpdateChecker.FetchChangelogAsync(),
                 _ => "No changelog available"
             };
         }
-        catch
+        catch (Exception ex)
         {
+            LogUtil.LogError($"Error fetching changelog for {botType}: {ex.Message}", "BotServer");
             return "Unable to fetch changelog";
         }
     }
@@ -545,22 +548,12 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
     {
         try
         {
-            var pokeBotUpdateCheckerType = Type.GetType("SysBot.Pokemon.Helpers.UpdateChecker, SysBot.Pokemon");
-            if (pokeBotUpdateCheckerType != null)
-            {
-                var fetchMethod = pokeBotUpdateCheckerType.GetMethod("FetchChangelogAsync");
-                if (fetchMethod != null)
-                {
-                    var task = (Task<string>)fetchMethod.Invoke(null, null);
-                    return await task;
-                }
-            }
-
-            return "Unable to fetch PokeBot changelog";
+            return await PokeBotUpdateChecker.FetchChangelogAsync();
         }
-        catch
+        catch (Exception ex)
         {
-            return "No changelog available";
+            LogUtil.LogError($"Error fetching PokeBot changelog: {ex.Message}", "BotServer");
+            return "Unable to fetch PokeBot changelog";
         }
     }
 
@@ -1534,7 +1527,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         {
             using var client = new TcpClient();
             var result = client.BeginConnect(ip, port, null, null);
-            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(1));
+            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(200)); // Reduziert von 1s auf 200ms
             if (success)
             {
                 client.EndConnect(result);
@@ -1616,7 +1609,21 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         try
         {
             using var client = new TcpClient();
-            client.Connect(ip, port);
+            
+            // Optimierter Timeout-basierter Connect
+            var result = client.BeginConnect(ip, port, null, null);
+            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(500)); // 500ms statt default
+            
+            if (!success || !client.Connected)
+            {
+                return "ERROR: Connection timeout";
+            }
+            
+            client.EndConnect(result);
+            
+            // Reduzierte Socket-Timeouts
+            client.ReceiveTimeout = 1000;  // 1s statt default
+            client.SendTimeout = 1000;     // 1s statt default
 
             using var stream = client.GetStream();
             using var writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
@@ -1625,9 +1632,9 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
             writer.WriteLine(command);
             return reader.ReadLine() ?? "No response";
         }
-        catch
+        catch (Exception ex)
         {
-            return "Failed to connect";
+            return $"ERROR: {ex.Message}";
         }
     }
 

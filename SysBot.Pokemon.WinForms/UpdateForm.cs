@@ -99,7 +99,7 @@ namespace SysBot.Pokemon.WinForms
 
             try
             {
-                string? downloadUrl = await UpdateChecker.FetchDownloadUrlAsync();
+                string? downloadUrl = await RaidBotUpdateChecker.FetchDownloadUrlAsync();
                 if (!string.IsNullOrWhiteSpace(downloadUrl))
                 {
                     string downloadedFilePath = await StartDownloadProcessAsync(downloadUrl);
@@ -126,7 +126,7 @@ namespace SysBot.Pokemon.WinForms
 
         private async Task FetchAndDisplayChangelog()
         {
-            textBoxChangelog.Text = await UpdateChecker.FetchChangelogAsync();
+            textBoxChangelog.Text = await RaidBotUpdateChecker.FetchChangelogAsync();
         }
 
         private async void ButtonDownload_Click(object sender, EventArgs e)
