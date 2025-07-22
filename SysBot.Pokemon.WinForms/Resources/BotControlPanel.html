@@ -1404,7 +1404,12 @@
                     <button class="btn" onclick="sendGlobalCommand('screenon')">💡 Screen On</button>
                     <button class="btn" onclick="sendGlobalCommand('screenoff')">🌙 Screen Off</button>
                     <button class="btn btn-raidbot" onclick="sendGlobalCommand('refreshmap')" id="refreshMapBtn" style="display: none;">🗺️ Refresh Map</button>
-                    <button class="btn btn-primary" onclick="updateAllInstances()">⬆️ Update All</button>
+                    <button class="btn btn-primary" onclick="updatePokeBotInstances()" id="updatePokeBotBtn">
+                        <img src="update_pokebot.png" style="width: 16px; height: 16px; margin-right: 4px;" alt="Update PokeBot"> Update PokeBot
+                    </button>
+                    <button class="btn btn-primary" onclick="updateRaidBotInstances()" id="updateRaidBotBtn">
+                        <img src="update_raidbot.png" style="width: 16px; height: 16px; margin-right: 4px;" alt="Update RaidBot"> Update RaidBot
+                    </button>
                 </div>
             </div>
             <div id="instances-container" class="instances-grid">
@@ -2146,6 +2151,18 @@
                 refreshMapBtn.style.display = hasRaidBots ? 'inline-flex' : 'none';
             }
 
+            // Show/hide update buttons based on available bot types
+            const hasPokeBots = instances.some(instance => instance.BotType === 'PokeBot');
+            const updatePokeBotBtn = document.getElementById('updatePokeBotBtn');
+            const updateRaidBotBtn = document.getElementById('updateRaidBotBtn');
+            
+            if (updatePokeBotBtn) {
+                updatePokeBotBtn.style.display = hasPokeBots ? 'inline-flex' : 'none';
+            }
+            if (updateRaidBotBtn) {
+                updateRaidBotBtn.style.display = hasRaidBots ? 'inline-flex' : 'none';
+            }
+
             container.innerHTML = instances.map(instance => {
                 const isOnline = instance.IsOnline || false;
                 const statusClass = isOnline ? 'online' : 'offline';
@@ -2268,41 +2285,40 @@
                             ` : ''}
 
                             <div class="instance-controls">
-                                <button class="action-menu-button" onclick="toggleActionMenu(event, ${instance.Port})" ${!isOnline ? 'disabled' : ''}>
-                                    ⚡ Actions <span style="font-size: 0.75rem;">▼</span>
+                                <button class="action-menu-button" onclick="toggleActionMenu(event, '${instance.IP}', ${instance.Port})" ${!isOnline ? 'disabled' : ''}>                                    ⚡ Actions <span style="font-size: 0.75rem;">▼</span>
                                 </button>
-                                <div class="action-menu" id="action-menu-${instance.Port}">
-                                                <button class="action-menu-item success" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'start')">
-                                                    ▶️ Start
-                                                </button>
-                                                <button class="action-menu-item danger" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'stop')">
-                                                    ⏹️ Stop
-                                                </button>
-                                                <button class="action-menu-item warning" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'idle')">
-                                                    ⏸️ Idle
-                                                </button>
-                                                <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'resume')">
-                                                    ⏯️ Resume
-                                                </button>
-                                                <div class="action-menu-divider"></div>
-                                                <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'restart')">
-                                                    🔄 Restart
-                                                </button>
-                                                <button class="action-menu-item danger" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'reboot')">
-                                                    🔌 Reboot
-                                                </button>
-                                                <div class="action-menu-divider"></div>
-                                                <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'screenon')">
-                                                    💡 Screen On
-                                                </button>
-                                                <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'screenoff')">
-                                                    🌙 Screen Off
-                                                </button>
-                                                ${botType === 'RaidBot' ? `
-                                                <div class="action-menu-divider"></div>
-                                                <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'refreshmap')" style="color: #8b5cf6;">
-                                                    🗺️ Refresh Map
-                                                </button>
+                                <div class="action-menu" id="action-menu-${instance.IP.replace(/\./g, '-')}-${instance.Port}">
+                                    <button class="action-menu-item success" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'start')">
+                                        ▶️ Start
+                                    </button>
+                                    <button class="action-menu-item danger" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'stop')">
+                                        ⏹️ Stop
+                                    </button>
+                                    <button class="action-menu-item warning" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'idle')">
+                                        ⏸️ Idle
+                                    </button>
+                                    <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'resume')">
+                                        ⏯️ Resume
+                                    </button>
+                                    <div class="action-menu-divider"></div>
+                                    <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'restart')">
+                                        🔄 Restart
+                                    </button>
+                                    <button class="action-menu-item danger" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'reboot')">
+                                        🔌 Reboot
+                                    </button>
+                                    <div class="action-menu-divider"></div>
+                                    <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'screenon')">
+                                        💡 Screen On
+                                    </button>
+                                    <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'screenoff')">
+                                        🌙 Screen Off
+                                    </button>
+                                    ${botType === 'RaidBot' ? `
+                                    <div class="action-menu-divider"></div>
+                                    <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'refreshmap')" style="color: #8b5cf6;">
+                                        🗺️ Refresh Map
+                                    </button>
                                     ` : ''}
                                 </div>
                             </div>
@@ -2345,14 +2361,14 @@
             showToast('info', 'Refreshed', 'Bot instances refreshed');
         }
 
-        function toggleActionMenu(event, port) {
-            event.stopPropagation();
-            const menu = document.getElementById(`action-menu-${port}`);
+        function toggleActionMenu(event, ip, port) {            event.stopPropagation();
+            const menuId = `action-menu-${ip.replace(/\./g, '-')}-${port}`;
+            const menu = document.getElementById(menuId);
             const allMenus = document.querySelectorAll('.action-menu');
 
             // Close all other menus
             allMenus.forEach(m => {
-                if (m.id !== `action-menu-${port}`) {
+                if (m.id !== menuId) {
                     m.classList.remove('show');
                 }
             });
@@ -2433,8 +2449,8 @@
 
         async function sendInstanceCommand(ip, port, command) {
             // Close action menu
-            document.getElementById(`action-menu-${port}`).classList.remove('show');
-
+            const menuId = `action-menu-${ip.replace(/\./g, '-')}-${port}`;
+            document.getElementById(menuId).classList.remove('show');
             // Clear interaction state
             isInteracting = false;
 
@@ -2583,6 +2599,72 @@
         function restartAllInstances() {
             if (confirm('Are you sure you want to restart all instances? This will stop all running bots temporarily.')) {
                 sendGlobalCommand('restart');
+            }
+        }
+
+        async function updatePokeBotInstances() {
+            await updateSpecificBotType('PokeBot');
+        }
+
+        async function updateRaidBotInstances() {
+            await updateSpecificBotType('RaidBot');
+        }
+
+        async function updateSpecificBotType(botType) {
+            showModal('progress-modal');
+            document.getElementById('progress-modal-title').textContent = `${botType} Update in Progress`;
+
+            updateState.type = 'update';
+            updateState.startTime = Date.now();
+            updateProgress(`Initializing ${botType} update process...`, `Starting background ${botType} update process`, 10);
+
+            try {
+                const endpoint = botType === 'PokeBot' ? 'pokebot' : 'raidbot';
+                const response = await fetch(`${API_BASE}/update/${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (!response.ok) throw new Error(`Failed to start ${botType} update`);
+
+                const result = await response.json();
+
+                if (result.Success) {
+                    updateProgress(
+                        `${botType} update started`,
+                        result.Message || `${botType} update process initiated`,
+                        50
+                    );
+                    addLogEntry(`${botType} update process initiated`, 'info');
+
+                    // Show results
+                    setTimeout(() => {
+                        updateProgress(
+                            `${botType} updates initiated`,
+                            `${result.UpdatesStarted || 0} ${botType} instances are now updating`,
+                            100
+                        );
+
+                        setTimeout(() => {
+                            closeModal('progress-modal');
+                            showToast('success', `${botType} Update Started`, 
+                                `Updates initiated for ${result.UpdatesStarted || 0} ${botType} instances`);
+                            refreshInstances(true);
+                        }, 2000);
+                    }, 1000);
+                } else {
+                    throw new Error(result.Message || `${botType} update failed`);
+                }
+
+            } catch (error) {
+                console.error(`Error starting ${botType} update:`, error);
+                updateProgress(`${botType} update failed`, error.message, 0);
+                addLogEntry(`Failed to start ${botType} update: ${error.message}`, 'error');
+
+                setTimeout(() => {
+                    closeModal('progress-modal');
+                    showToast('error', 'Error', `Failed to start ${botType} update process`);
+                }, 2000);
             }
         }
     </script>

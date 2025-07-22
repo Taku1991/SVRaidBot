@@ -275,41 +275,51 @@ public static class WebApiExtensions
 
             var botType = DetectBotType();
 
-            _main.BeginInvoke((MethodInvoker)(async () =>
+            // Start automatic update without dialog in background task
+            _ = Task.Run(async () =>
             {
                 try
                 {
                     bool updateAvailable = false;
                     string newVersion = "";
+                    string botTypeString = "";
 
                     if (botType == BotType.RaidBot)
                     {
                         // Use RaidBot UpdateChecker
                         var (available, _, version) = await RaidBotUpdateChecker.CheckForUpdatesAsync(false);
                         updateAvailable = available;
-                        newVersion = version;
+                        newVersion = version ?? "";
+                        botTypeString = "RaidBot";
                     }
                     else if (botType == BotType.PokeBot)
                     {
                         // Use PokeBot UpdateChecker
                         var (available, _, version) = await PokeBotUpdateChecker.CheckForUpdatesAsync(false);
                         updateAvailable = available;
-                        newVersion = version;
+                        newVersion = version ?? "";
+                        botTypeString = "PokeBot";
                     }
 
                     if (updateAvailable && !string.IsNullOrEmpty(newVersion))
                     {
-                        var updateForm = new UpdateForm(false, newVersion, true);
-                        updateForm.PerformUpdate();
+                        LogUtil.LogInfo($"Starting automatic {botTypeString} update to version {newVersion}", "WebAPI");
+                        
+                        // Use automatic update instead of UpdateForm
+                        await UpdateManager.PerformAutomaticUpdate(botTypeString, newVersion);
+                    }
+                    else
+                    {
+                        LogUtil.LogInfo($"No {botTypeString} update available", "WebAPI");
                     }
                 }
                 catch (Exception ex)
                 {
-                    LogUtil.LogError($"Error in TriggerUpdate: {ex.Message}", "WebAPI");
+                    LogUtil.LogError($"Error in automatic update: {ex.Message}", "WebAPI");
                 }
-            }));
+            });
 
-            return "OK: Update triggered";
+            return "OK: Automatic update triggered";
         }
         catch (Exception ex)
         {

@@ -208,6 +208,8 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                 "/api/bot/update/check" => await CheckForUpdates(),
                 "/api/bot/update/idle-status" => GetIdleStatus(),
                 "/api/bot/update/all" => await UpdateAllInstances(request),
+                "/api/bot/update/pokebot" => await UpdatePokeBotInstances(request),
+                "/api/bot/update/raidbot" => await UpdateRaidBotInstances(request),
                 _ => null
             };
 
@@ -337,6 +339,84 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         }
         catch (Exception ex)
         {
+            return CreateErrorResponse(ex.Message);
+        }
+    }
+
+    private async Task<string> UpdatePokeBotInstances(HttpListenerRequest request)
+    {
+        try
+        {
+            // Start PokeBot-specific update
+            var result = await UpdateManager.StartPokeBotUpdateAsync(_mainForm, _tcpPort);
+
+            return JsonSerializer.Serialize(new
+            {
+                Stage = "updating",
+                Success = result.UpdatesFailed == 0 && result.UpdatesNeeded > 0,
+                result.TotalInstances,
+                result.UpdatesNeeded,
+                result.UpdatesStarted,
+                result.UpdatesFailed,
+                BotType = "PokeBot",
+                Message = result.UpdatesNeeded == 0 ? "All PokeBot instances are already up to date" :
+                         result.UpdatesStarted > 0 ? $"PokeBot update initiated for {result.UpdatesStarted} instances" :
+                         "No PokeBot updates were started",
+                Results = result.InstanceResults.Select(r => new
+                {
+                    r.Port,
+                    r.ProcessId,
+                    r.CurrentVersion,
+                    r.LatestVersion,
+                    r.NeedsUpdate,
+                    r.UpdateStarted,
+                    r.Error,
+                    r.BotType
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Failed to start PokeBot update: {ex.Message}", "WebServer");
+            return CreateErrorResponse(ex.Message);
+        }
+    }
+
+    private async Task<string> UpdateRaidBotInstances(HttpListenerRequest request)
+    {
+        try
+        {
+            // Start RaidBot-specific update
+            var result = await UpdateManager.StartRaidBotUpdateAsync(_mainForm, _tcpPort);
+
+            return JsonSerializer.Serialize(new
+            {
+                Stage = "updating",
+                Success = result.UpdatesFailed == 0 && result.UpdatesNeeded > 0,
+                result.TotalInstances,
+                result.UpdatesNeeded,
+                result.UpdatesStarted,
+                result.UpdatesFailed,
+                BotType = "RaidBot",
+                Message = result.UpdatesNeeded == 0 ? "All RaidBot instances are already up to date" :
+                         result.UpdatesStarted > 0 ? $"RaidBot update initiated for {result.UpdatesStarted} instances" :
+                         "No RaidBot updates were started",
+                Results = result.InstanceResults.Select(r => new
+                {
+                    r.Port,
+                    r.ProcessId,
+                    r.CurrentVersion,
+                    r.LatestVersion,
+                    r.NeedsUpdate,
+                    r.UpdateStarted,
+                    r.Error,
+                    r.BotType
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Failed to start RaidBot update: {ex.Message}", "WebServer");
             return CreateErrorResponse(ex.Message);
         }
     }
