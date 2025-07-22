@@ -620,20 +620,8 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         var isLocalhostIP = ip == "127.0.0.1" || ip == "localhost";
         var isOurPort = port == _tcpPort;
         
-        if (isLocalhostIP && isOurPort)
-        {
-            // Das ist definitiv unsere lokale Instanz
-            return true;
-        }
-        
-        if (!isLocalhostIP)
-        {
-            // Nicht-localhost IPs sind immer remote
-            return false;
-        }
-        
-        // Localhost IP aber anderer Port - prüfen ob es remote ist
-        return !IsRemoteInstance(ip, port);
+        // Nur wenn es sowohl localhost IP als auch unser Port ist, behandeln wir es als lokale Instanz
+        return isLocalhostIP && isOurPort;
     }
 
 
