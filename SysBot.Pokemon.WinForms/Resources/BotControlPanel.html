@@ -1521,32 +1521,71 @@
             startAutoRefresh();
             startConnectionMonitor(); // Add this line
 
+            // Helper function for closest() polyfill
+            function findClosest(element, selector) {
+                if (!element || element.nodeType !== 1) return null;
+                
+                if (typeof element.closest === 'function') {
+                    return element.closest(selector);
+                }
+                
+                // Polyfill for older browsers
+                let el = element;
+                while (el && el.nodeType === 1) {
+                    // Use matches() or fallback to alternative methods
+                    let matches = false;
+                    if (el.matches) {
+                        matches = el.matches(selector);
+                    } else if (el.webkitMatchesSelector) {
+                        matches = el.webkitMatchesSelector(selector);
+                    } else if (el.mozMatchesSelector) {
+                        matches = el.mozMatchesSelector(selector);
+                    } else if (el.msMatchesSelector) {
+                        matches = el.msMatchesSelector(selector);
+                    }
+                    
+                    if (matches) {
+                        return el;
+                    }
+                    el = el.parentElement;
+                }
+                return null;
+            }
+
             // Close menus when clicking outside
             document.addEventListener('click', (e) => {
-                if (!e.target.closest('.instance-controls')) {
-                    document.querySelectorAll('.action-menu.show').forEach(menu => {
-                        menu.classList.remove('show');
-                    });
+                if (e.target && e.target.nodeType === 1) {
+                    if (!findClosest(e.target, '.instance-controls')) {
+                        document.querySelectorAll('.action-menu.show').forEach(menu => {
+                            menu.classList.remove('show');
+                        });
+                    }
                 }
             });
 
             // Track mouse interaction
             document.addEventListener('mouseenter', (e) => {
-                if (e.target.closest('.instance-card')) {
-                    isInteracting = true;
+                if (e.target && e.target.nodeType === 1) {
+                    if (findClosest(e.target, '.instance-card')) {
+                        isInteracting = true;
+                    }
                 }
             }, true);
 
             document.addEventListener('mouseleave', (e) => {
-                if (e.target.closest('.instance-card')) {
-                    isInteracting = false;
+                if (e.target && e.target.nodeType === 1) {
+                    if (findClosest(e.target, '.instance-card')) {
+                        isInteracting = false;
+                    }
                 }
             }, true);
 
             // Track touch interaction
             document.addEventListener('touchstart', (e) => {
-                if (e.target.closest('.instance-card')) {
-                    isInteracting = true;
+                if (e.target && e.target.nodeType === 1) {
+                    if (findClosest(e.target, '.instance-card')) {
+                        isInteracting = true;
+                    }
                 }
             });
 
@@ -1572,6 +1611,16 @@
             forcedUpdate: false
         };
 
+        // Safe element access helper
+        function safeElementAccess(elementId, action) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                action(element);
+            } else {
+                console.warn(`Element with ID '${elementId}' not found`);
+            }
+        }
+
         async function updateAllInstances() {
             // First, check what updates are available
             showModal('update-modal');
@@ -1594,9 +1643,15 @@
                 const instancesData = await instancesResponse.json();
                 const currentVersion = instancesData.Instances?.[0]?.Version || 'Unknown';
 
-                document.getElementById('current-version').textContent = currentVersion;
-                document.getElementById('new-version').textContent = 'Checking...';
-                document.getElementById('changelog-content').innerHTML = '<div class="spinner"></div>';
+                safeElementAccess('current-version', (el) => {
+                    el.textContent = currentVersion;
+                });
+                safeElementAccess('new-version', (el) => {
+                    el.textContent = 'Checking...';
+                });
+                safeElementAccess('changelog-content', (el) => {
+                    el.innerHTML = '<div class="spinner"></div>';
+                });
 
                 // Check for updates
                 const checkResponse = await fetch(`${API_BASE}/update/check`);
@@ -1612,13 +1667,21 @@
                     updateState.changelog = 'Unable to fetch changelog. Update will proceed to latest version.';
                 }
 
-                document.getElementById('new-version').textContent = updateState.newVersion;
-                document.getElementById('changelog-content').textContent = updateState.changelog;
+                safeElementAccess('new-version', (el) => {
+                    el.textContent = updateState.newVersion;
+                });
+                safeElementAccess('changelog-content', (el) => {
+                    el.textContent = updateState.changelog;
+                });
 
             } catch (error) {
                 console.error('Error checking updates:', error);
-                document.getElementById('new-version').textContent = 'Latest';
-                document.getElementById('changelog-content').textContent = 'Unable to fetch update information. Click Update to proceed.';
+                safeElementAccess('new-version', (el) => {
+                    el.textContent = 'Latest';
+                });
+                safeElementAccess('changelog-content', (el) => {
+                    el.textContent = 'Unable to fetch update information. Click Update to proceed.';
+                });
             }
         }
 
@@ -1678,8 +1741,12 @@
                 addLogEntry('Sending idle command to all bots...', 'info');
 
                 // Show idle status immediately
-                document.getElementById('idle-status').style.display = 'block';
-                document.getElementById('force-update-btn').style.display = 'inline-flex';
+                safeElementAccess('idle-status', (el) => {
+                    el.style.display = 'block';
+                });
+                safeElementAccess('force-update-btn', (el) => {
+                    el.style.display = 'inline-flex';
+                });
 
                 // Start monitoring idle status
                 setTimeout(() => {
@@ -1712,7 +1779,9 @@
             updateState.countdownInterval = setInterval(() => {
                 const elapsed = Math.floor((Date.now() - updateState.startTime) / 1000);
                 const remaining = Math.max(0, updateState.timeout - elapsed);
-                document.getElementById('timeout-countdown').textContent = remaining;
+                safeElementAccess('timeout-countdown', (el) => {
+                    el.textContent = remaining;
+                });
 
                 if (remaining === 0 && !updateState.forcedUpdate) {
                     forceUpdate();
@@ -1729,8 +1798,12 @@
                     const idledBots = data.TotalIdleBots || 0;
                     const allIdle = data.AllBotsIdle || false;
 
-                    document.getElementById('bots-idled').textContent = idledBots;
-                    document.getElementById('bots-remaining').textContent = totalBots - idledBots;
+                    safeElementAccess('bots-idled', (el) => {
+                        el.textContent = idledBots;
+                    });
+                    safeElementAccess('bots-remaining', (el) => {
+                        el.textContent = totalBots - idledBots;
+                    });
 
                     // Build detailed status
                     let detailsHtml = '<div style="margin-top: 10px; font-size: 0.8rem;">';
@@ -1758,7 +1831,9 @@
                         detailsHtml += '</div>';
                     }
 
-                    document.getElementById('bot-details').innerHTML = detailsHtml;
+                    safeElementAccess('bot-details', (el) => {
+                        el.innerHTML = detailsHtml;
+                    });
 
                     // Log progress when bots idle (but not too frequently)
                     const now = Date.now();
@@ -1779,7 +1854,9 @@
 
                     // Update progress bar
                     const idleProgress = 30 + (idledBots / totalBots) * 40;
-                    document.getElementById('progress-bar').style.width = `${idleProgress}%`;
+                    safeElementAccess('progress-bar', (el) => {
+                        el.style.width = `${idleProgress}%`;
+                    });
 
                     // Only proceed if ALL bots are idle
                     if (allIdle && !updateState.forcedUpdate) {
@@ -1818,8 +1895,12 @@
                     }
                 });
 
-                document.getElementById('bots-idled').textContent = idledBots;
-                document.getElementById('bots-remaining').textContent = totalBots - idledBots;
+                safeElementAccess('bots-idled', (el) => {
+                    el.textContent = idledBots;
+                });
+                safeElementAccess('bots-remaining', (el) => {
+                    el.textContent = totalBots - idledBots;
+                });
 
                 if (idledBots === totalBots && !updateState.forcedUpdate) {
                     clearInterval(updateState.idleCheckInterval);
@@ -1839,8 +1920,12 @@
             );
             addLogEntry('All bots successfully idled. Starting updates...', 'success');
 
-            document.getElementById('idle-status').style.display = 'none';
-            document.getElementById('force-update-btn').style.display = 'none';
+            safeElementAccess('idle-status', (el) => {
+                el.style.display = 'none';
+            });
+            safeElementAccess('force-update-btn', (el) => {
+                el.style.display = 'none';
+            });
 
             try {
                 // Call the update endpoint with proceed stage
@@ -1929,9 +2014,15 @@
         }
 
         function updateProgress(status, details, percentage) {
-            document.getElementById('progress-status').textContent = status;
-            document.getElementById('progress-details').textContent = details;
-            document.getElementById('progress-bar').style.width = `${percentage}%`;
+            safeElementAccess('progress-status', (el) => {
+                el.textContent = status;
+            });
+            safeElementAccess('progress-details', (el) => {
+                el.textContent = details;
+            });
+            safeElementAccess('progress-bar', (el) => {
+                el.style.width = `${percentage}%`;
+            });
 
             // Update icon based on status
             const iconMap = {

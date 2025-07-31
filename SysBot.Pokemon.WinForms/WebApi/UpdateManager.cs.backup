@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -146,7 +146,7 @@ public static class UpdateManager
                     var updateForm = await CreateUpdateFormForBotType(botType, latestVersion);
                     if (updateForm != null)
                     {
-                        mainForm.BeginInvoke((System.Windows.Forms.MethodInvoker)(() =>
+                        mainForm.BeginInvoke((MethodInvoker)(() =>
                         {
                             updateForm.PerformUpdate();
                         }));
@@ -304,7 +304,7 @@ public static class UpdateManager
                     var updateForm = await CreateUpdateFormForBotType(botType, latestVersion);
                     if (updateForm != null)
                     {
-                        mainForm.BeginInvoke((System.Windows.Forms.MethodInvoker)(() =>
+                        mainForm.BeginInvoke((MethodInvoker)(() =>
                         {
                             updateForm.PerformUpdate();
                         }));
@@ -706,7 +706,7 @@ public static class UpdateManager
             using (var client = new System.Net.Http.HttpClient())
             {
                 client.DefaultRequestHeaders.Add("User-Agent", "SysBot-AutoUpdate");
-                client.Timeout = TimeSpan.FromMinutes(10); // 10 Minuten Timeout f�r Download
+                client.Timeout = TimeSpan.FromMinutes(10); // 10 Minuten Timeout für Download
                 
                 LogUtil.LogInfo($"Starting download to: {tempPath}", "UpdateManager");
                 
@@ -815,7 +815,7 @@ del ""%~f0"" 2>nul
             // Use BeginInvoke to call Close() on the UI thread, which triggers proper cleanup
             if (Application.OpenForms.Count > 0 && Application.OpenForms[0] is Main mainForm)
             {
-                mainForm.BeginInvoke((System.Windows.Forms.MethodInvoker)(() =>
+                mainForm.BeginInvoke((MethodInvoker)(() =>
                 {
                     // Set the flag to indicate this is a real close (not minimize to tray)
                     var isReallyClosingField = mainForm.GetType().GetField("_isReallyClosing",
