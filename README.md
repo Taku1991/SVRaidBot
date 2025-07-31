@@ -1,3 +1,7 @@
+![GitHub Release](https://img.shields.io/github/v/release/hexbyt3/Svraidbot)
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/hexbyt3/Svraidbot/total?color=violet)
+
+
 # Sc/Vi RaidBot
 
 ![Discord Banner 2](https://discord.com/api/guilds/1369342739581505536/widget.png?style=banner2)
