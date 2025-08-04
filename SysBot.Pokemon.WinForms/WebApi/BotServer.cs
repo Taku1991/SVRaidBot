@@ -210,6 +210,8 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                 "/api/bot/update/all" => await UpdateAllInstances(request),
                 "/api/bot/update/pokebot" => await UpdatePokeBotInstances(request),
                 "/api/bot/update/raidbot" => await UpdateRaidBotInstances(request),
+                "/icon.ico" => ServeIcon(),
+                var path when path?.EndsWith(".png") == true => ServeImage(path),
                 _ => null
             };
 
@@ -221,7 +223,48 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
             else
             {
                 response.StatusCode = 200;
-                response.ContentType = request.Url?.LocalPath == "/" ? "text/html" : "application/json";
+                
+                // Set appropriate content type
+                if (request.Url?.LocalPath == "/")
+                {
+                    response.ContentType = "text/html";
+                }
+                else if (request.Url?.LocalPath == "/icon.ico")
+                {
+                    response.ContentType = "image/x-icon";
+                }
+                else if (request.Url?.LocalPath?.EndsWith(".png") == true)
+                {
+                    response.ContentType = "image/png";
+                }
+                else
+                {
+                    response.ContentType = "application/json";
+                }
+            }
+
+            // Handle binary content for icon and images
+            if (request.Url?.LocalPath == "/icon.ico" && responseString == "BINARY_ICON")
+            {
+                var iconBytes = GetIconBytes();
+                if (iconBytes != null)
+                {
+                    response.ContentLength64 = iconBytes.Length;
+                    await response.OutputStream.WriteAsync(iconBytes, 0, iconBytes.Length);
+                    await response.OutputStream.FlushAsync();
+                    return;
+                }
+            }
+            else if (request.Url?.LocalPath?.EndsWith(".png") == true && responseString == "BINARY_IMAGE")
+            {
+                var imageBytes = GetImageBytes(request.Url.LocalPath);
+                if (imageBytes != null)
+                {
+                    response.ContentLength64 = imageBytes.Length;
+                    await response.OutputStream.WriteAsync(imageBytes, 0, imageBytes.Length);
+                    await response.OutputStream.FlushAsync();
+                    return;
+                }
             }
 
             var buffer = Encoding.UTF8.GetBytes(responseString);
@@ -1472,7 +1515,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         var instances = new List<BotInstance>();
         var portRange = GetPortRangeForNode(remoteIP, tailscaleConfig);
 
-        LogUtil.LogInfo($"Scanning {remoteIP} ports {portRange.start}-{portRange.end}", "WebServer");
+        // LogUtil.LogInfo($"Scanning {remoteIP} ports {portRange.start}-{portRange.end}", "WebServer"); // Suppressed for cleaner logs
 
         for (int port = portRange.start; port <= portRange.end; port++)
         {
@@ -1768,4 +1811,115 @@ public class BatchCommandResponse
     public List<CommandResponse> Results { get; set; } = [];
     public int TotalInstances { get; set; }
     public int SuccessfulCommands { get; set; }
+}
+
+// Additional methods for image and icon serving
+public partial class BotServer
+{
+    private string ServeIcon()
+    {
+        return "BINARY_ICON"; // Special marker for binary content
+    }
+    
+    private string ServeImage(string path)
+    {
+        return "BINARY_IMAGE"; // Special marker for binary content
+    }
+    
+    private byte[]? GetIconBytes()
+    {
+        try
+        {
+            // First try to find icon.ico in the executable directory
+            var exePath = Application.ExecutablePath;
+            var exeDir = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory;
+            var iconPath = Path.Combine(exeDir, "icon.ico");
+
+            if (File.Exists(iconPath))
+            {
+                return File.ReadAllBytes(iconPath);
+            }
+
+            // If not found, try to extract from embedded resources
+            var assembly = Assembly.GetExecutingAssembly();
+            var iconStream = assembly.GetManifestResourceStream("SysBot.Pokemon.WinForms.icon.ico");
+
+            if (iconStream != null)
+            {
+                using (iconStream)
+                {
+                    var buffer = new byte[iconStream.Length];
+                    iconStream.ReadExactly(buffer);
+                    return buffer;
+                }
+            }
+
+            // Try to get the application icon as a fallback
+            var icon = Icon.ExtractAssociatedIcon(exePath);
+            if (icon != null)
+            {
+                using (var ms = new MemoryStream())
+                {
+                    icon.Save(ms);
+                    return ms.ToArray();
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Failed to load icon: {ex.Message}", "WebServer");
+            return null;
+        }
+    }
+    
+    private byte[]? GetImageBytes(string imagePath)
+    {
+        try
+        {
+            // Extract filename from path (e.g., "/update_pokebot.png" -> "update_pokebot.png")
+            var fileName = Path.GetFileName(imagePath);
+            
+            // First try to find image in the executable directory
+            var exePath = Application.ExecutablePath;
+            var exeDir = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory;
+            var resourcesDir = Path.Combine(exeDir, "Resources");
+            var imagePath1 = Path.Combine(resourcesDir, fileName);
+            var imagePath2 = Path.Combine(exeDir, fileName);
+            
+            if (File.Exists(imagePath1))
+            {
+                return File.ReadAllBytes(imagePath1);
+            }
+            
+            if (File.Exists(imagePath2))
+            {
+                return File.ReadAllBytes(imagePath2);
+            }
+            
+            // Try to extract from embedded resources
+            var assembly = Assembly.GetExecutingAssembly();
+            var resourceName = assembly.GetManifestResourceNames()
+                .FirstOrDefault(name => name.EndsWith(fileName, StringComparison.OrdinalIgnoreCase));
+            
+            if (!string.IsNullOrEmpty(resourceName))
+            {
+                using var imageStream = assembly.GetManifestResourceStream(resourceName);
+                if (imageStream != null)
+                {
+                    using var memoryStream = new MemoryStream();
+                    imageStream.CopyTo(memoryStream);
+                    return memoryStream.ToArray();
+                }
+            }
+            
+            return null;
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Failed to load image {imagePath}: {ex.Message}", "WebServer");
+            return null;
+        }
+    }
 }
