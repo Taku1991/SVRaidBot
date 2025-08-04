@@ -74,6 +74,16 @@ public static class UpdateManager
         return port > 0 && port <= 65535;
     }
 
+    private static BotType ParseBotType(string botType)
+    {
+        return botType.ToLowerInvariant() switch
+        {
+            "pokebot" => BotType.PokeBot,
+            "raidbot" => BotType.RaidBot,
+            _ => BotType.Unknown
+        };
+    }
+
     public class UpdateAllResult
     {
         public int TotalInstances { get; set; }
@@ -133,7 +143,7 @@ public static class UpdateManager
             {
                 try
                 {
-                    var (updateAvailable, _, latestVersion) = await CheckForUpdatesForBotType(instance.BotType);
+                    var (updateAvailable, _, latestVersion) = await CheckForUpdatesForBotType(ParseBotType(instance.BotType));
                     if (updateAvailable && !string.IsNullOrEmpty(latestVersion) && instance.Version != latestVersion)
                     {
                         instancesNeedingUpdate.Add((instance.ProcessId, instance.Port, instance.Version, instance.BotType));
@@ -245,7 +255,7 @@ public static class UpdateManager
             {
                 try
                 {
-                    var (updateAvailable, _, latestVersion) = await CheckForUpdatesForBotType(instance.BotType);
+                    var (updateAvailable, _, latestVersion) = await CheckForUpdatesForBotType(ParseBotType(instance.BotType));
                     if (updateAvailable && !string.IsNullOrEmpty(latestVersion) && instance.Version != latestVersion)
                     {
                         // Get executable path for this instance
@@ -1048,6 +1058,161 @@ public static class UpdateManager
         catch
         {
             return "Unknown";
+        }
+    }
+
+    // Legacy method - kept for compatibility
+    public static async Task<bool> PerformAutomaticUpdate(string botType, string latestVersion)
+    {
+        try
+        {
+            LogUtil.LogInfo($"Starting automatic {botType} update to version {latestVersion}", "UpdateManager");
+
+            string? downloadUrl = null;
+            
+            // Get download URL based on bot type
+            if (botType == "PokeBot")
+            {
+                var updateCheckerType = Type.GetType("SysBot.Pokemon.WinForms.PokeBotUpdateChecker, SysBot.Pokemon.WinForms");
+                var method = updateCheckerType?.GetMethod("FetchDownloadUrlAsync", 
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var task = (Task<string>)method?.Invoke(null, null);
+                downloadUrl = await task ?? string.Empty;
+            }
+            else if (botType == "RaidBot")
+            {
+                var updateCheckerType = Type.GetType("SysBot.Pokemon.WinForms.RaidBotUpdateChecker, SysBot.Pokemon.WinForms");
+                var method = updateCheckerType?.GetMethod("FetchDownloadUrlAsync", 
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                var task = (Task<string>)method?.Invoke(null, null);
+                downloadUrl = await task ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(downloadUrl))
+            {
+                LogUtil.LogError($"Failed to fetch download URL for {botType}", "UpdateManager");
+                return false;
+            }
+
+            LogUtil.LogInfo($"Downloading {botType} update from: {downloadUrl}", "UpdateManager");
+
+            // Download new version
+            string tempPath = await DownloadUpdateAsync(downloadUrl, botType);
+            if (string.IsNullOrEmpty(tempPath))
+            {
+                LogUtil.LogError($"Failed to download {botType} update", "UpdateManager");
+                return false;
+            }
+
+            LogUtil.LogInfo($"Download completed: {tempPath}", "UpdateManager");
+
+            // Install update automatically
+            bool installSuccess = await InstallUpdateAutomatically(tempPath, botType);
+            
+            if (installSuccess)
+            {
+                LogUtil.LogInfo($"Automatic {botType} update completed successfully", "UpdateManager");
+            }
+            else
+            {
+                LogUtil.LogError($"Failed to install {botType} update", "UpdateManager");
+            }
+
+            return installSuccess;
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Automatic {botType} update failed: {ex.Message}", "UpdateManager");
+            return false;
+        }
+    }
+
+    private static async Task<bool> InstallUpdateAutomatically(string downloadedFilePath, string botType)
+    {
+        try
+        {
+            string currentExePath = Application.ExecutablePath;
+            string applicationDirectory = Path.GetDirectoryName(currentExePath) ?? "";
+            string executableName = Path.GetFileName(currentExePath);
+            string backupPath = Path.Combine(applicationDirectory, $"{executableName}.backup");
+
+            LogUtil.LogInfo($"Installing {botType} update: {downloadedFilePath} -> {currentExePath}", "UpdateManager");
+
+            // Use safer .NET process management instead of batch files
+            LogUtil.LogInfo($"Installing {botType} update using managed process approach", "UpdateManager");
+            
+            // Create backup
+            if (File.Exists(currentExePath))
+            {
+                if (File.Exists(backupPath))
+                {
+                    File.Delete(backupPath);
+                }
+                File.Move(currentExePath, backupPath);
+                LogUtil.LogInfo("Backup created successfully", "UpdateManager");
+            }
+            
+            // Rename temp file to final executable name
+            string finalPath = Path.ChangeExtension(downloadedFilePath, ".exe");
+            File.Move(downloadedFilePath, finalPath);
+            
+            // Move to final location
+            File.Move(finalPath, currentExePath);
+            
+            LogUtil.LogInfo("Update files installed successfully", "UpdateManager");
+
+            // Schedule restart after brief delay
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(3000); // Wait 3 seconds
+                
+                try
+                {
+                    LogUtil.LogInfo("Starting updated application", "UpdateManager");
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = currentExePath,
+                        UseShellExecute = true,
+                        WorkingDirectory = applicationDirectory
+                    });
+                }
+                catch (Exception ex)
+                {
+                    LogUtil.LogError($"Failed to start updated application: {ex.Message}", "UpdateManager");
+                    
+                    // Restore backup on failure
+                    if (File.Exists(backupPath))
+                    {
+                        try
+                        {
+                            if (File.Exists(currentExePath))
+                                File.Delete(currentExePath);
+                            File.Move(backupPath, currentExePath);
+                            Process.Start(currentExePath);
+                            LogUtil.LogInfo("Backup restored and application restarted", "UpdateManager");
+                        }
+                        catch (Exception restoreEx)
+                        {
+                            LogUtil.LogError($"Failed to restore backup: {restoreEx.Message}", "UpdateManager");
+                        }
+                    }
+                }
+            });
+
+            // Schedule clean shutdown
+            LogUtil.LogInfo($"Scheduling clean shutdown for {botType} update", "UpdateManager");
+            
+            await Task.Delay(1000); // Brief delay to ensure file operations complete
+            
+            LogUtil.LogInfo("Using Application.Exit for shutdown", "UpdateManager");
+            Application.Exit();
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Failed to install {botType} update: {ex.Message}", "UpdateManager");
+            return false;
         }
     }
 }
