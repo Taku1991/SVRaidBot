@@ -226,13 +226,21 @@ public static class WebApiExtensions
                     var response = ProcessCommand(command);
                     await writer.WriteLineAsync(response);
                     await stream.FlushAsync();
-                    // await Task.Delay(100); // Entfernt für bessere Performance
+                    
+                    // Give client time to read response before closing connection
+                    await Task.Delay(50);
                 }
             }
         }
-        catch (Exception ex) when (!(ex is IOException { InnerException: SocketException }))
+        catch (Exception ex) when (!(ex is IOException { InnerException: SocketException }) && 
+                                   !ex.Message.Contains("connection") && 
+                                   !ex.Message.Contains("Verbindung"))
         {
             LogUtil.LogError($"Error handling TCP client: {ex.Message}", "TCP");
+        }
+        catch (Exception ex) when (ex is IOException || ex.Message.Contains("connection") || ex.Message.Contains("Verbindung"))
+        {
+            // Suppress common TCP connection errors
         }
     }
 
@@ -241,12 +249,14 @@ public static class WebApiExtensions
         if (_main == null)
             return "ERROR: Main form not initialized";
 
+
         var parts = command.Split(':');
         var cmd = parts[0].ToUpperInvariant();
         var botId = parts.Length > 1 ? parts[1] : null;
 
         return cmd switch
         {
+            // Global commands (ALL suffix)
             "STARTALL" => ExecuteGlobalCommand(BotControlCommand.Start),
             "STOPALL" => ExecuteGlobalCommand(BotControlCommand.Stop),
             "IDLEALL" => ExecuteGlobalCommand(BotControlCommand.Idle),
@@ -256,6 +266,19 @@ public static class WebApiExtensions
             "REFRESHMAPALL" => ExecuteGlobalCommand(BotControlCommand.RefreshMap),
             "SCREENONALL" => ExecuteGlobalCommand(BotControlCommand.ScreenOnAll),
             "SCREENOFFALL" => ExecuteGlobalCommand(BotControlCommand.ScreenOffAll),
+            
+            // Individual bot commands (no ALL suffix)
+            "START" => ExecuteGlobalCommand(BotControlCommand.Start),
+            "STOP" => ExecuteGlobalCommand(BotControlCommand.Stop),
+            "IDLE" => ExecuteGlobalCommand(BotControlCommand.Idle),
+            "RESUME" => ExecuteGlobalCommand(BotControlCommand.Resume),
+            "RESTART" => ExecuteGlobalCommand(BotControlCommand.Restart),
+            "REBOOT" => ExecuteGlobalCommand(BotControlCommand.RebootAndStop),
+            "SCREENON" => ExecuteGlobalCommand(BotControlCommand.ScreenOnAll),
+            "SCREENOFF" => ExecuteGlobalCommand(BotControlCommand.ScreenOffAll),
+            "REFRESHMAP" => ExecuteGlobalCommand(BotControlCommand.RefreshMap),
+            
+            // System commands
             "LISTBOTS" => GetBotsList(),
             "STATUS" => GetBotStatuses(botId),
             "ISREADY" => CheckReady(),
@@ -331,6 +354,7 @@ public static class WebApiExtensions
     {
         try
         {
+            
             _main!.BeginInvoke((MethodInvoker)(() =>
             {
                 var sendAllMethod = _main.GetType().GetMethod("SendAll",
@@ -471,7 +495,8 @@ public static class WebApiExtensions
                 Port = _tcpPort
             };
 
-            return System.Text.Json.JsonSerializer.Serialize(info);
+            var jsonResponse = System.Text.Json.JsonSerializer.Serialize(info);
+            return jsonResponse;
         }
         catch (Exception ex)
         {

@@ -1,6 +1,7 @@
 ﻿using PKHeX.Core;
 using SysBot.Base;
 using SysBot.Pokemon.SV.BotRaid.Helpers;
+using SysBot.Pokemon.WinForms.WebApi;
 // using SysBot.Web;
 using System;
 using System.Collections.Generic;
@@ -354,8 +355,56 @@ namespace SysBot.Pokemon.WinForms
 
         private async void Updater_Click(object sender, EventArgs e)
         {
-            var (updateAvailable, updateRequired, newVersion) = await UpdateChecker.CheckForUpdatesAsync(forceShow: true);
-            hasUpdate = updateAvailable; // Update the indicator
+            try
+            {
+                var (updateAvailable, updateRequired, newVersion) = await UpdateChecker.CheckForUpdatesAsync(forceShow: false);
+                hasUpdate = updateAvailable; // Update the indicator
+
+                if (!updateAvailable)
+                {
+                    var result = MessageBox.Show(
+                        "You are on the latest version. Would you like to re-download the current version?",
+                        "Update Check",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+
+                    if (result == DialogResult.Yes)
+                    {
+                        // Use automatic update instead of dialog
+                        WinFormsUtil.Alert("Starting automatic update. The application will restart when complete.");
+                        
+                        // Trigger automatic update
+                        _ = Task.Run(async () =>
+                        {
+                            await UpdateManager.PerformAutomaticUpdate("RaidBot", newVersion ?? "latest");
+                        });
+                    }
+                }
+                else
+                {
+                    // Show available update info and start automatic update
+                    var result = MessageBox.Show(
+                        $"Update available: {newVersion}\n\nStart automatic update now?",
+                        "Update Available",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+                        
+                    if (result == DialogResult.Yes)
+                    {
+                        WinFormsUtil.Alert("Starting automatic update. The application will restart when complete.");
+                        
+                        // Trigger automatic update
+                        _ = Task.Run(async () =>
+                        {
+                            await UpdateManager.PerformAutomaticUpdate("RaidBot", newVersion ?? "latest");
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                WinFormsUtil.Error($"Update check failed: {ex.Message}");
+            }
         }
 
         private void StartUpdateCheckTimer()

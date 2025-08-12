@@ -29,6 +29,12 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
 
     // Bot type detection cache
     private static readonly Dictionary<int, BotType> _botTypeCache = new();
+    
+    // Instance cache to prevent expensive re-scanning
+    private static readonly object _instanceCacheLock = new();
+    private static List<BotInstance>? _cachedInstances = null;
+    private static DateTime _lastCacheUpdate = DateTime.MinValue;
+    private static readonly TimeSpan _cacheTimeout = TimeSpan.FromSeconds(2); // Cache for 2 seconds
 
     public enum BotType
     {
@@ -197,10 +203,16 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                 return;
             }
 
-            string? responseString = request.Url?.LocalPath switch
+            // Handle query parameters (like ?v=2.0.0) by using only the path
+            var requestPath = request.Url?.LocalPath ?? "";
+            
+            string? responseString = requestPath switch
             {
                 "/" => HtmlTemplate,
+                "/BotControlPanel.css" => ServeEmbeddedResource("BotControlPanel.css", "text/css"),
+                "/BotControlPanel.js" => ServeEmbeddedResource("BotControlPanel.js", "application/javascript"),
                 "/api/bot/instances" => GetInstances(),
+                "/api/bot/debug" => GetDebugInfo(),
                 var path when path?.StartsWith("/api/bot/instances/") == true && path.EndsWith("/bots") =>
                     GetBots(path),
                 var path when path?.StartsWith("/api/bot/instances/") == true && path.EndsWith("/command") =>
@@ -208,9 +220,13 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                 "/api/bot/command/all" => await RunAllCommand(request),
                 "/api/bot/update/check" => await CheckForUpdates(),
                 "/api/bot/update/idle-status" => GetIdleStatus(),
+                "/api/bot/update/active" => GetActiveUpdates(),
                 "/api/bot/update/all" => await UpdateAllInstances(request),
                 "/api/bot/update/pokebot" => await UpdatePokeBotInstances(request),
                 "/api/bot/update/raidbot" => await UpdateRaidBotInstances(request),
+                "/api/bot/restart/all" => await RestartAllInstances(request),
+                "/api/bot/restart/proceed" => await ProceedWithRestarts(request),
+                "/api/bot/restart/schedule" => await UpdateRestartSchedule(request),
                 "/icon.ico" => ServeIcon(),
                 var path when path?.EndsWith(".png") == true => ServeImage(path),
                 _ => null
@@ -226,26 +242,34 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                 response.StatusCode = 200;
                 
                 // Set appropriate content type
-                if (request.Url?.LocalPath == "/")
+                if (requestPath == "/")
                 {
-                    response.ContentType = "text/html";
+                    response.ContentType = "text/html; charset=utf-8";
                 }
-                else if (request.Url?.LocalPath == "/icon.ico")
+                else if (requestPath == "/BotControlPanel.css")
+                {
+                    response.ContentType = "text/css; charset=utf-8";
+                }
+                else if (requestPath == "/BotControlPanel.js")
+                {
+                    response.ContentType = "application/javascript; charset=utf-8";
+                }
+                else if (requestPath == "/icon.ico")
                 {
                     response.ContentType = "image/x-icon";
                 }
-                else if (request.Url?.LocalPath?.EndsWith(".png") == true)
+                else if (requestPath.EndsWith(".png"))
                 {
                     response.ContentType = "image/png";
                 }
                 else
                 {
-                    response.ContentType = "application/json";
+                    response.ContentType = "application/json; charset=utf-8";
                 }
             }
 
             // Handle binary content for icon and images
-            if (request.Url?.LocalPath == "/icon.ico" && responseString == "BINARY_ICON")
+            if (requestPath == "/icon.ico" && responseString == "BINARY_ICON")
             {
                 var iconBytes = GetIconBytes();
                 if (iconBytes != null)
@@ -256,9 +280,9 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                     return;
                 }
             }
-            else if (request.Url?.LocalPath?.EndsWith(".png") == true && responseString == "BINARY_IMAGE")
+            else if (requestPath.EndsWith(".png") && responseString == "BINARY_IMAGE")
             {
-                var imageBytes = GetImageBytes(request.Url.LocalPath);
+                var imageBytes = GetImageBytes(requestPath);
                 if (imageBytes != null)
                 {
                     response.ContentLength64 = imageBytes.Length;
@@ -402,7 +426,7 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                 result.UpdatesNeeded,
                 result.UpdatesStarted,
                 result.UpdatesFailed,
-                BotType = "PokeBot",
+                BotType = "Unknown",
                 Message = result.UpdatesNeeded == 0 ? "All PokeBot instances are already up to date" :
                          result.UpdatesStarted > 0 ? $"PokeBot update initiated for {result.UpdatesStarted} instances" :
                          "No PokeBot updates were started",
@@ -751,67 +775,168 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
 
     private string GetInstances()
     {
-        var instances = new List<BotInstance>
+        try
         {
-            CreateLocalInstance()
-        };
+            lock (_instanceCacheLock)
+            {
+                // Check if cache is still valid
+                if (_cachedInstances != null && DateTime.Now - _lastCacheUpdate < _cacheTimeout)
+                {
+                    // Update only the local instance (which is fast) and return cached remote instances
+                    var localInstance = CreateLocalInstance();
+                    var result = new List<BotInstance> { localInstance };
+                    
+                    // Add cached remote instances
+                    result.AddRange(_cachedInstances.Where(i => !i.IsLocal));
+                    
+                    return JsonSerializer.Serialize(new { Instances = result });
+                }
+                
+                // Cache expired or doesn't exist - perform full scan
+                var instances = new List<BotInstance>
+                {
+                    CreateLocalInstance()
+                };
+                
+                // Perform expensive remote scan
+                var remoteInstances = ScanRemoteInstancesFast();
+                instances.AddRange(remoteInstances);
+                
+                // Cache the results
+                _cachedInstances = new List<BotInstance>(instances);
+                _lastCacheUpdate = DateTime.Now;
+                
+                return JsonSerializer.Serialize(new { Instances = instances });
+            }
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Error in GetInstances: {ex.Message}", "WebServer");
+            
+            // Fallback to just local instance if there's an error
+            var localInstance = CreateLocalInstance();
+            return JsonSerializer.Serialize(new { Instances = new[] { localInstance } });
+        }
+    }
 
-        instances.AddRange(ScanRemoteInstances());
+    private string GetDebugInfo()
+    {
+        try
+        {
+            var config = GetConfig();
+            var controllers = GetBotControllers();
+            var localInstance = CreateLocalInstance();
+            
+            var debugInfo = new
+            {
+                ConfigExists = config != null,
+                ConfigMode = config?.Mode.ToString(),
+                ControllerCount = controllers?.Count ?? 0,
+                TcpPort = _tcpPort,
+                LocalInstance = new
+                {
+                    localInstance.ProcessId,
+                    localInstance.Name,
+                    localInstance.Port,
+                    localInstance.IP,
+                    localInstance.Version,
+                    localInstance.Mode,
+                    localInstance.BotCount,
+                    localInstance.IsOnline,
+                    localInstance.BotType
+                },
+                RawGetInstancesResponse = GetInstances()
+            };
 
-        return JsonSerializer.Serialize(new { Instances = instances });
+            return JsonSerializer.Serialize(debugInfo, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { Error = ex.Message, StackTrace = ex.StackTrace }, new JsonSerializerOptions { WriteIndented = true });
+        }
     }
 
     private BotInstance CreateLocalInstance()
     {
-        var config = GetConfig();
-        var controllers = GetBotControllers();
-
-        var mode = config?.Mode.ToString() ?? "Unknown";
-        var botType = DetectLocalBotType();
-        var name = GetBotName(config, botType);
-
-        var version = GetVersionForBotType(botType);
-
-        var botStatuses = controllers.Select(c => new BotStatusInfo
+        try
         {
-            Name = GetBotName(c.State, config),
-            Status = c.ReadBotState()
-        }).ToList();
+            var config = GetConfig();
+            var controllers = GetBotControllers();
 
-        return new BotInstance
+            var mode = config?.Mode.ToString() ?? "Unknown";
+            var botType = DetectLocalBotType();
+            var name = GetBotName(config, botType);
+
+            var version = GetVersionForBotType(botType);
+
+            // Reduced logging - only log when instance is created for the first time
+
+            var botStatuses = controllers?.Select(c => 
+            {
+                try
+                {
+                    return new BotStatusInfo
+                    {
+                        Name = GetBotName(c.State, config),
+                        Status = c.ReadBotState()
+                    };
+                }
+                catch
+                {
+                    return new BotStatusInfo { Name = "Unknown", Status = "Error" };
+                }
+            }).ToList() ?? new List<BotStatusInfo>();
+
+            var instance = new BotInstance
+            {
+                ProcessId = Environment.ProcessId,
+                Name = name ?? "SVRaidBot",
+                Port = _tcpPort,
+                WebPort = GetWebPortForTcpPort(_tcpPort),
+                IP = "127.0.0.1",
+                Version = version,
+                Mode = mode,
+                BotCount = botStatuses.Count,
+                IsOnline = true,
+                IsMaster = true,
+                IsRemote = false,
+                BotStatuses = botStatuses,
+                BotType = botType.ToString()
+            };
+
+            LogUtil.LogInfo($"Local instance created: Port={instance.Port}, Version={instance.Version}, Mode={instance.Mode}, BotCount={instance.BotCount}", "WebServer");
+            return instance;
+        }
+        catch (Exception ex)
         {
-            ProcessId = Environment.ProcessId,
-            Name = name,
-            Port = _tcpPort,
-            Version = version,
-            Mode = mode,
-            BotCount = botStatuses.Count,
-            IsOnline = true,
-            IsMaster = true,
-            BotStatuses = botStatuses,
-            BotType = botType.ToString()
-        };
+            LogUtil.LogError($"Error creating local instance: {ex.Message}", "WebServer");
+            
+            // Return minimal working instance
+            return new BotInstance
+            {
+                ProcessId = Environment.ProcessId,
+                Name = "SVRaidBot (Error)",
+                Port = _tcpPort,
+                WebPort = GetWebPortForTcpPort(_tcpPort),
+                IP = "127.0.0.1",
+                Version = "Error",
+                Mode = "Error",
+                BotCount = 0,
+                IsOnline = true,
+                IsMaster = true,
+                IsRemote = false,
+                BotStatuses = new List<BotStatusInfo>(),
+                BotType = "RaidBot"
+            };
+        }
     }
 
     private BotType DetectLocalBotType()
     {
         try
         {
-            // Try to detect RaidBot first (since this is in RaidBot folder)
-            var raidBotType = Type.GetType("SysBot.Pokemon.SV.BotRaid.Helpers.SVRaidBot, SysBot.Pokemon");
-            if (raidBotType != null)
-            {
-                return BotType.RaidBot;
-            }
-
-            // Try to detect PokeBot
-            var pokeBotType = Type.GetType("SysBot.Pokemon.Helpers.PokeBot, SysBot.Pokemon");
-            if (pokeBotType != null)
-            {
-                return BotType.PokeBot;
-            }
-
-            return BotType.Unknown;
+            // This is SVRaidBot - always return RaidBot
+            return BotType.RaidBot;
         }
         catch
         {
@@ -894,6 +1019,323 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
     }
 
     private static HashSet<int> _knownInstances = new HashSet<int>();
+    
+    private List<BotInstance> ScanRemoteInstancesFast()
+    {
+        var instances = new List<BotInstance>();
+
+        try
+        {
+            // Get Tailscale configuration
+            var config = GetConfig();
+            var tailscaleConfig = config?.Hub?.Tailscale;
+
+            // If Tailscale is enabled, scan remote nodes (this is fast network scanning)
+            if (tailscaleConfig?.Enabled == true)
+            {
+                var tasks = tailscaleConfig.RemoteNodes.Select(remoteIP => 
+                    Task.Run(() => 
+                    {
+                        try
+                        {
+                            return ScanRemoteNodeFast(remoteIP, tailscaleConfig);
+                        }
+                        catch (Exception ex)
+                        {
+                            LogUtil.LogError($"Error scanning remote node {remoteIP}: {ex.Message}", "WebServer");
+                            return new List<BotInstance>();
+                        }
+                    })).ToArray();
+
+                // Wait for all remote scans to complete with timeout
+                if (Task.WaitAll(tasks, TimeSpan.FromMilliseconds(1500))) // Increased timeout
+                {
+                    foreach (var task in tasks)
+                    {
+                        instances.AddRange(task.Result);
+                    }
+                }
+                else
+                {
+                    LogUtil.LogInfo("Some remote node scans timed out", "WebServer");
+                }
+            }
+
+            // Scan full bot port range for multi-bot support (8080-8100)
+            var portsToScan = Enumerable.Range(8080, 21).ToArray(); // 8080 to 8100 inclusive
+            var portTasks = new List<Task<BotInstance?>>();
+            
+            foreach (var port in portsToScan)
+            {
+                if (port == _tcpPort) continue; // Skip our own port
+                
+                var currentPort = port;
+                var task = Task.Run(() => TryCreateInstanceFromPortAndIPFast("127.0.0.1", currentPort));
+                portTasks.Add(task);
+            }
+            
+            // Also scan the configured port range if different
+            var portRange = GetLocalPortRange(tailscaleConfig);
+            for (int port = portRange.start; port <= portRange.end; port++)
+            {
+                if (port == _tcpPort) continue; // Skip our own port
+                if (portsToScan.Contains(port)) continue; // Skip already scanned ports
+                
+                var currentPort = port;
+                var task = Task.Run(() => TryCreateInstanceFromPortAndIPFast("127.0.0.1", currentPort));
+                portTasks.Add(task);
+            }
+            
+            // Wait for port scans with longer timeout for full range
+            var portScanCompleted = Task.WaitAll(portTasks.ToArray(), TimeSpan.FromMilliseconds(3000)); // Increased for stability
+            
+            foreach (var task in portTasks.Where(t => t.IsCompleted))
+            {
+                try
+                {
+                    var instance = task.Result;
+                    if (instance != null)
+                    {
+                        instances.Add(instance);
+                    }
+                }
+                catch
+                {
+                    // Ignore individual task failures
+                }
+            }
+            
+            if (!portScanCompleted)
+            {
+                LogUtil.LogInfo("Port scan partially timed out - some instances may not be shown", "WebServer");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Error in fast remote instance scan: {ex.Message}", "WebServer");
+        }
+
+        return instances;
+    }
+
+    private List<BotInstance> ScanRemoteNodeFast(string remoteIP, TailscaleSettings tailscaleConfig)
+    {
+        var instances = new List<BotInstance>();
+        var portRange = GetPortRangeForNode(remoteIP, tailscaleConfig);
+
+        for (int port = portRange.start; port <= portRange.end; port++)
+        {
+            try
+            {
+                var instance = TryCreateInstanceFromPortAndIPFast(remoteIP, port);
+                if (instance != null)
+                {
+                    instance.IsRemote = true;
+                    instance.IP = remoteIP;
+                    instances.Add(instance);
+                }
+            }
+            catch
+            {
+                // Ignore individual port failures
+            }
+        }
+
+        return instances;
+    }
+
+    private static int GetWebPortForTcpPort(int tcpPort)
+    {
+        // Standard port mapping: TCP port + 1000 for web port
+        // e.g., TCP 8080 -> Web 9080, TCP 8081 -> Web 9081
+        return tcpPort + 1000;
+    }
+
+    private static BotInstance? TryCreateInstanceFromPortAndIPFast(string ip, int port)
+    {
+        try
+        {
+            // Quick port check with minimal timeout
+            if (!IsPortOpenFast(ip, port))
+                return null;
+
+            // Quick INFO query
+            var infoResponse = QueryRemoteFast(ip, port, "INFO");
+            if (string.IsNullOrEmpty(infoResponse) || 
+                infoResponse.StartsWith("Failed") || 
+                infoResponse.StartsWith("ERROR") ||
+                !infoResponse.Contains("{"))
+            {
+                return null;
+            }
+
+            var instance = new BotInstance
+            {
+                ProcessId = 0,
+                Name = "Unknown Bot",
+                Port = port,
+                WebPort = GetWebPortForTcpPort(port),
+                IP = ip,
+                Version = "Unknown",
+                Mode = "Unknown",
+                BotCount = 0,
+                IsOnline = true,
+                IsRemote = ip != "127.0.0.1",
+                BotType = "Unknown"
+            };
+
+            UpdateInstanceInfoFast(instance, ip, port);
+            return instance;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool IsPortOpenFast(string ip, int port)
+    {
+        try
+        {
+            using var client = new TcpClient();
+            var result = client.BeginConnect(ip, port, null, null);
+            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(300)); // Increased for stability
+            if (success)
+            {
+                client.EndConnect(result);
+                return true;
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string QueryRemoteFast(string ip, int port, string command)
+    {
+        try
+        {
+            using var client = new TcpClient();
+            
+            var result = client.BeginConnect(ip, port, null, null);
+            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(300)); // Increased for stability
+            
+            if (!success || !client.Connected)
+            {
+                return "ERROR: Connection timeout";
+            }
+            
+            client.EndConnect(result);
+            client.ReceiveTimeout = 200;  // Very fast timeout
+            client.SendTimeout = 200;
+
+            using var stream = client.GetStream();
+            using var writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+
+            writer.WriteLine(command);
+            return reader.ReadLine() ?? "No response";
+        }
+        catch (Exception ex)
+        {
+            return $"ERROR: {ex.Message}";
+        }
+    }
+
+    private static void UpdateInstanceInfoFast(BotInstance instance, string ip, int port)
+    {
+        try
+        {
+            var infoResponse = QueryRemoteFast(ip, port, "INFO");
+            if (infoResponse.StartsWith("{"))
+            {
+                using var doc = JsonDocument.Parse(infoResponse);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("Version", out var version))
+                    instance.Version = version.GetString() ?? "Unknown";
+
+                if (root.TryGetProperty("Mode", out var mode))
+                    instance.Mode = mode.GetString() ?? "Unknown";
+
+                if (root.TryGetProperty("Name", out var name))
+                    instance.Name = name.GetString() ?? "Unknown Bot";
+
+                if (root.TryGetProperty("BotType", out var botType))
+                {
+                    instance.BotType = botType.GetString() ?? "PokeBot";
+                }
+                else
+                {
+                    // Enhanced bot type detection
+                    var versionStr = instance.Version.ToLower();
+                    var nameStr = instance.Name.ToLower();
+                    
+                    // Enhanced bot type detection for full port range
+                    if (nameStr.Contains("raid") || versionStr.Contains("raid") || nameStr.Contains("sv") || port >= 8082)
+                    {
+                        instance.BotType = "RaidBot";
+                        if (instance.Name == "Unknown Bot")
+                            instance.Name = $"SVRaidBot (Port {port})";
+                    }
+                    else if (port == 8080)
+                    {
+                        instance.BotType = "PokeBot";
+                        if (instance.Name == "Unknown Bot")
+                            instance.Name = "PokeBot (Master)";
+                    }
+                    else if (port == 8081)
+                    {
+                        instance.BotType = "PokeBot";
+                        if (instance.Name == "Unknown Bot")
+                            instance.Name = "PokeBot (Secondary)";
+                    }
+                    else
+                    {
+                        instance.BotType = "PokeBot";
+                        if (instance.Name == "Unknown Bot")
+                            instance.Name = $"PokeBot (Port {port})";
+                    }
+                }
+            }
+
+            // Try to get process ID from port files
+            if (ip == "127.0.0.1" && instance.ProcessId == 0)
+            {
+                instance.ProcessId = GetProcessIdFromPortFiles(port);
+            }
+
+            // Quick bot count check - skip if too slow
+            try
+            {
+                var botsResponse = QueryRemoteFast(ip, port, "LISTBOTS");
+                if (botsResponse.StartsWith("{") && botsResponse.Contains("Bots"))
+                {
+                    var botsData = JsonSerializer.Deserialize<Dictionary<string, List<BotInfo>>>(botsResponse);
+                    if (botsData?.ContainsKey("Bots") == true)
+                    {
+                        instance.BotCount = botsData["Bots"].Count;
+                        instance.BotStatuses = [.. botsData["Bots"].Select(b => new BotStatusInfo
+                        {
+                            Name = b.Name,
+                            Status = b.Status
+                        })];
+                    }
+                }
+            }
+            catch
+            {
+                // If bot list query fails or times out, just skip it
+                instance.BotCount = 0;
+            }
+        }
+        catch
+        {
+            // If anything fails, just use default values
+        }
+    }
     
     private List<BotInstance> ScanRemoteInstances()
     {
@@ -995,7 +1437,30 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                 }
             }
 
-            // Always scan localhost ports for direct connections
+            // Always scan full bot port range first for multi-bot support
+            var standardPorts = Enumerable.Range(8080, 21).ToArray(); // 8080 to 8100 inclusive
+            foreach (var port in standardPorts)
+            {
+                if (port == _tcpPort) continue; // Skip our own port
+                if (currentInstances.Contains(port)) continue; // Skip already found instances
+
+                try
+                {
+                    var instance = TryCreateInstanceFromPortAndIP("127.0.0.1", port);
+                    if (instance != null)
+                    {
+                        instances.Add(instance);
+                        currentInstances.Add(port);
+                        LogUtil.LogInfo($"Found standard bot instance: {instance.Name} on port {port}", "WebServer");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogUtil.LogError($"Error scanning standard port {port}: {ex.Message}", "WebServer");
+                }
+            }
+            
+            // Also scan the configured port range if different
             var portRange = GetLocalPortRange(tailscaleConfig);
             for (int port = portRange.start; port <= portRange.end; port++)
             {
@@ -1265,7 +1730,7 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
         {
             using var client = new TcpClient();
             var result = client.BeginConnect("127.0.0.1", port, null, null);
-            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(100));
+            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(300)); // Increased for stability
             if (success)
             {
                 client.EndConnect(result);
@@ -1332,13 +1797,21 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
 
             else
             {
-                var tcpCommand = $"{commandRequest.Command}All".ToUpper();
+                // For remote bots, ensure commands have ALL suffix for compatibility
+                var tcpCommand = commandRequest.Command.ToUpper();
+                if (!tcpCommand.EndsWith("ALL") && IsGlobalCommand(tcpCommand))
+                {
+                    tcpCommand += "ALL";
+                }
+                LogUtil.LogInfo($"[Command] Sending {tcpCommand} to remote bot at {ip}:{port}", "WebServer");
                 var result = QueryRemote(ip, port, tcpCommand);
-
+                
+                var success = !result.StartsWith("ERROR") && !result.StartsWith("Failed");
+                LogUtil.LogInfo($"[Command] Remote command result: {(success ? "SUCCESS" : "FAILED")} - {result}", "WebServer");
 
                 return JsonSerializer.Serialize(new CommandResponse
                 {
-                    Success = !result.StartsWith("ERROR") && !result.StartsWith("Failed"),
+                    Success = success,
                     Message = result,
                     Port = port,
                     Command = commandRequest.Command,
@@ -1378,7 +1851,7 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
             {
                 try
                 {
-                    var result = QueryRemote(instance.Port, $"{commandRequest.Command}All".ToUpper());
+                    var result = QueryRemote(instance.Port, $"{commandRequest.Command.ToUpper()}ALL");
                     results.Add(new CommandResponse
                     {
                         Success = !result.StartsWith("ERROR"),
@@ -1439,6 +1912,12 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
         }
     }
 
+    private static bool IsGlobalCommand(string command)
+    {
+        var globalCommands = new[] { "START", "STOP", "IDLE", "RESUME", "RESTART", "REBOOT", "SCREENON", "SCREENOFF", "REFRESHMAP", "UPDATE" };
+        return globalCommands.Contains(command);
+    }
+
     private static BotControlCommand MapCommand(string webCommand)
     {
         return webCommand.ToLower() switch
@@ -1452,7 +1931,8 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
             "refreshmap" => BotControlCommand.RefreshMap,
             "screenon" => BotControlCommand.ScreenOnAll,
             "screenoff" => BotControlCommand.ScreenOffAll,
-            _ => BotControlCommand.None
+            "update" => BotControlCommand.Restart, // Update als Restart behandeln
+            _ => BotControlCommand.Start // Fallback zu Start statt None
         };
     }
 
@@ -1614,6 +2094,7 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                 ProcessId = 0, // Cannot get process ID from port alone
                 Name = "Unknown Bot",
                 Port = port,
+                WebPort = GetWebPortForTcpPort(port),
                 IP = ip,
                 Version = "Unknown",
                 Mode = "Unknown",
@@ -1750,12 +2231,137 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
         }
     }
 
+    private static int GetProcessIdFromPortFiles(int port)
+    {
+        try
+        {
+            // Look for port files in common locations
+            var searchDirectories = new[]
+            {
+                Directory.GetCurrentDirectory(),
+                @"F:\PokeBot\SysBot.Pokemon.WinForms\bin\Debug\net9.0-windows\win-x86",
+                @"F:\PokeBot\SVRaidBot\SysBot.Pokemon.WinForms\bin\Debug\net9.0-windows\win-x64",
+                Path.Combine(AppContext.BaseDirectory)
+            };
+
+            foreach (var directory in searchDirectories)
+            {
+                if (!Directory.Exists(directory)) continue;
+
+                var portFiles = Directory.GetFiles(directory, "*.port", SearchOption.TopDirectoryOnly);
+                foreach (var file in portFiles)
+                {
+                    try
+                    {
+                        // Quick filename check first to avoid unnecessary file reads
+                        var fileName = Path.GetFileNameWithoutExtension(file);
+                        if (fileName.Contains("_"))
+                        {
+                            var content = File.ReadAllText(file).Trim();
+                            if (int.TryParse(content, out var filePort) && filePort == port)
+                            {
+                                // Extract process ID from filename (e.g., "SVRaidBot_23928.port" -> 23928)
+                                var lastUnderscore = fileName.LastIndexOf('_');
+                                if (lastUnderscore > 0 && lastUnderscore < fileName.Length - 1)
+                                {
+                                    var processIdStr = fileName.Substring(lastUnderscore + 1);
+                                    if (int.TryParse(processIdStr, out var processId))
+                                    {
+                                        LogUtil.LogInfo($"Found process ID {processId} for port {port} from file {file}", "WebServer");
+                                        return processId;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogUtil.LogError($"Error reading port file {file}: {ex.Message}", "WebServer");
+                    }
+                }
+            }
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Error searching for port files for port {port}: {ex.Message}", "WebServer");
+            return 0;
+        }
+    }
+
     public void Dispose()
     {
         Stop();
         _listener?.Close();
         _cts?.Dispose();
     }
+
+    private string GetActiveUpdates()
+    {
+        try
+        {
+            // For SVRaidBot, we'll use the GetActiveOperations method
+            return GetActiveOperations();
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse(ex.Message);
+        }
+    }
+
+    private async Task<string> RestartAllInstances(HttpListenerRequest request)
+    {
+        try
+        {
+            // Simple implementation for RaidBot
+            return JsonSerializer.Serialize(new
+            {
+                Success = true,
+                TotalInstances = 1,
+                Error = (string?)null,
+                Message = "Restart not implemented for RaidBot yet"
+            });
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse(ex.Message);
+        }
+    }
+
+    private async Task<string> ProceedWithRestarts(HttpListenerRequest request)
+    {
+        try
+        {
+            // Simple implementation for RaidBot
+            return JsonSerializer.Serialize(new
+            {
+                Success = true,
+                TotalInstances = 1,
+                MasterRestarting = false,
+                Error = (string?)null,
+                Message = "Restart proceed not implemented for RaidBot yet"
+            });
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse(ex.Message);
+        }
+    }
+
+    private async Task<string> UpdateRestartSchedule(HttpListenerRequest request)
+    {
+        try
+        {
+            // Simple implementation - return current schedule
+            return GetRestartSchedule();
+        }
+        catch (Exception ex)
+        {
+            return CreateErrorResponse(ex.Message);
+        }
+    }
+
 }
 
 public class BotInstance
@@ -1763,6 +2369,7 @@ public class BotInstance
     public int ProcessId { get; set; }
     public string Name { get; set; } = string.Empty;
     public int Port { get; set; }
+    public int WebPort { get; set; }
     public string IP { get; set; } = "127.0.0.1";
     public string Version { get; set; } = string.Empty;
     public int BotCount { get; set; }
@@ -1770,6 +2377,7 @@ public class BotInstance
     public bool IsOnline { get; set; }
     public bool IsMaster { get; set; }
     public bool IsRemote { get; set; }
+    public bool IsLocal => !IsRemote;
     public List<BotStatusInfo>? BotStatuses { get; set; }
     public string BotType { get; set; } = "Unknown";
 }
@@ -1817,6 +2425,30 @@ public class BatchCommandResponse
 // Additional methods for image and icon serving
 public partial class BotServer
 {
+    private string ServeEmbeddedResource(string resourceName, string contentType)
+    {
+        try
+        {
+            // For SVRaidBot, try file system first, then embedded resource
+            var exePath = System.Windows.Forms.Application.ExecutablePath;
+            var exeDir = Path.GetDirectoryName(exePath) ?? Environment.CurrentDirectory;
+            var resourcePath = Path.Combine(exeDir, "Resources", resourceName);
+            
+            if (File.Exists(resourcePath))
+            {
+                return File.ReadAllText(resourcePath);
+            }
+            
+            // Fallback to embedded resource
+            return LoadEmbeddedResource(resourceName);
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Failed to load resource '{resourceName}': {ex.Message}", "WebServer");
+            return $"/* Error loading {resourceName}: {ex.Message} */";
+        }
+    }
+
     private string ServeIcon()
     {
         return "BINARY_ICON"; // Special marker for binary content
@@ -1921,6 +2553,57 @@ public partial class BotServer
         {
             LogUtil.LogError($"Failed to load image {imagePath}: {ex.Message}", "WebServer");
             return null;
+        }
+    }
+
+    private string GetActiveOperations()
+    {
+        try
+        {
+            // Return empty active operations for now
+            var response = new
+            {
+                active = false,
+                operation = (string?)null,
+                progress = 0,
+                status = "idle",
+                startTime = (string?)null,
+                estimatedTime = (string?)null
+            };
+
+            return JsonSerializer.Serialize(response, new JsonSerializerOptions 
+            { 
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
+            });
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Error getting active operations: {ex.Message}", "WebServer");
+            return JsonSerializer.Serialize(new { error = "Failed to get active operations" });
+        }
+    }
+
+    private string GetRestartSchedule()
+    {
+        try
+        {
+            // Return empty restart schedule for now
+            var response = new
+            {
+                enabled = false,
+                time = "00:00",
+                nextRestart = (string?)null
+            };
+
+            return JsonSerializer.Serialize(response, new JsonSerializerOptions 
+            { 
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
+            });
+        }
+        catch (Exception ex)
+        {
+            LogUtil.LogError($"Error getting restart schedule: {ex.Message}", "WebServer");
+            return JsonSerializer.Serialize(new { error = "Failed to get restart schedule" });
         }
     }
 }

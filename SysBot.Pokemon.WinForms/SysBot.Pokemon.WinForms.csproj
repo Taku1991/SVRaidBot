@@ -28,8 +28,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <DebugType>none</DebugType>
   </PropertyGroup>
+  <PropertyGroup>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+  </PropertyGroup>
   <ItemGroup>
     <None Remove="Resources\BotControlPanel.html" />
+    <None Remove="Resources\BotControlPanel.css" />
+    <None Remove="Resources\BotControlPanel.js" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Discord.Net" Version="3.17.1" />
@@ -59,7 +64,12 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Update="Properties\Resources.resx">
+    <EmbeddedResource Include="Resources\BotControlPanel.html" />
+    <EmbeddedResource Include="Resources\BotControlPanel.css" />
+    <EmbeddedResource Include="Resources\BotControlPanel.js" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
@@ -71,10 +81,5 @@
     <Content Include="..\SysBot.Pokemon\deps\RaidCrawler.Core.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\BotControlPanel.html">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </EmbeddedResource>
   </ItemGroup>
 </Project>

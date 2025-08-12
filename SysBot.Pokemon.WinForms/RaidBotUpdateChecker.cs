@@ -31,10 +31,17 @@ namespace SysBot.Pokemon.WinForms
             bool updateRequired = latestRelease.Prerelease == false && IsUpdateRequired(latestRelease.Body);
             string? newVersion = latestRelease.TagName;
 
-            if (forceShow)
+            // Only show update dialog if explicitly forced (manual button click)
+            // Automatic updates via web interface handle updates without dialogs
+            if (forceShow && updateAvailable)
             {
                 UpdateForm updateForm = new(updateRequired, newVersion ?? "", updateAvailable);
                 updateForm.ShowDialog();
+            }
+            else if (updateAvailable && !forceShow)
+            {
+                // Log automatic update detection without showing dialog
+                Console.WriteLine($"RaidBot update available: {newVersion}. Use web interface or manual update button to upgrade.");
             }
 
             return (updateAvailable, updateRequired, newVersion ?? string.Empty);
