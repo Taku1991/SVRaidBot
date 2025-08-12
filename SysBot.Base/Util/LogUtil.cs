@@ -16,6 +16,14 @@ namespace SysBot.Base
 
     public static class LogUtil
     {
+        private static readonly HashSet<string> SuppressedIdentities = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "TCP",
+        };
+
+        private static bool ShouldSuppress(string identity, string message)
+            => SuppressedIdentities.Contains(identity) ||
+               message.Contains("tcp", StringComparison.OrdinalIgnoreCase);
         static LogUtil()
         {
             if (!LogConfig.LoggingEnabled)
@@ -52,12 +60,16 @@ namespace SysBot.Base
 
         public static void LogError(string message, string identity)
         {
+            if (ShouldSuppress(identity, message))
+                return;
             Logger.Log(LogLevel.Error, $"{identity} {message}");
             Log(message, identity);
         }
 
         public static void LogInfo(string message, string identity)
         {
+            if (ShouldSuppress(identity, message))
+                return;
             Logger.Log(LogLevel.Info, $"{identity} {message}");
             Log(message, identity);
         }
