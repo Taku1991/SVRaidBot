@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using SysBot.Base;
+using SysBot.Pokemon.WinForms.WebApi.Models;
 
 namespace SysBot.Pokemon.WinForms.WebApi;
 
@@ -34,7 +35,7 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
     private static readonly object _instanceCacheLock = new();
     private static List<BotInstance>? _cachedInstances = null;
     private static DateTime _lastCacheUpdate = DateTime.MinValue;
-    private static readonly TimeSpan _cacheTimeout = TimeSpan.FromSeconds(2); // Cache for 2 seconds
+    private static readonly TimeSpan _cacheTimeout = TimeSpan.FromSeconds(1); // Reduced cache for better responsiveness
 
     public enum BotType
     {
@@ -88,7 +89,6 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
             {
                 _listener.Prefixes.Add($"http://+:{_port}/");
                 _listener.Start();
-                LogUtil.LogInfo($"Web server listening on all interfaces at port {_port}", "WebServer");
             }
             catch (HttpListenerException ex) when (ex.ErrorCode == 5)
             {
@@ -98,9 +98,6 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                 _listener.Start();
 
                 LogUtil.LogError($"Web server requires administrator privileges for network access. Currently limited to localhost only.", "WebServer");
-                LogUtil.LogInfo("To enable network access, either:", "WebServer");
-                LogUtil.LogInfo("1. Run this application as Administrator", "WebServer");
-                LogUtil.LogInfo($"2. Or run this command as admin: netsh http add urlacl url=http://+:{_port}/ user=Everyone", "WebServer");
             }
 
             _running = true;
@@ -904,7 +901,6 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                 BotType = botType.ToString()
             };
 
-            LogUtil.LogInfo($"Local instance created: Port={instance.Port}, Version={instance.Version}, Mode={instance.Mode}, BotCount={instance.BotCount}", "WebServer");
             return instance;
         }
         catch (Exception ex)
@@ -1048,7 +1044,7 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                     })).ToArray();
 
                 // Wait for all remote scans to complete with timeout
-                if (Task.WaitAll(tasks, TimeSpan.FromMilliseconds(1500))) // Increased timeout
+                if (Task.WaitAll(tasks, TimeSpan.FromMilliseconds(5000))) // Much longer for Tailscale
                 {
                     foreach (var task in tasks)
                     {
@@ -1057,7 +1053,6 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                 }
                 else
                 {
-                    LogUtil.LogInfo("Some remote node scans timed out", "WebServer");
                 }
             }
 
@@ -1087,7 +1082,7 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
             }
             
             // Wait for port scans with longer timeout for full range
-            var portScanCompleted = Task.WaitAll(portTasks.ToArray(), TimeSpan.FromMilliseconds(3000)); // Increased for stability
+            var portScanCompleted = Task.WaitAll(portTasks.ToArray(), TimeSpan.FromMilliseconds(4000)); // Increased for local stability
             
             foreach (var task in portTasks.Where(t => t.IsCompleted))
             {
@@ -1107,7 +1102,6 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
             
             if (!portScanCompleted)
             {
-                LogUtil.LogInfo("Port scan partially timed out - some instances may not be shown", "WebServer");
             }
         }
         catch (Exception ex)
@@ -1199,7 +1193,8 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
         {
             using var client = new TcpClient();
             var result = client.BeginConnect(ip, port, null, null);
-            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(300)); // Increased for stability
+            var timeoutMs = ip == "127.0.0.1" ? 600 : 2500; // Much longer timeout for remote instances  
+            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(timeoutMs));
             if (success)
             {
                 client.EndConnect(result);
@@ -1220,7 +1215,8 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
             using var client = new TcpClient();
             
             var result = client.BeginConnect(ip, port, null, null);
-            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(300)); // Increased for stability
+            var timeoutMs = ip == "127.0.0.1" ? 800 : 3000; // Much longer timeout for remote instances
+            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(timeoutMs));
             
             if (!success || !client.Connected)
             {
@@ -1228,8 +1224,9 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
             }
             
             client.EndConnect(result);
-            client.ReceiveTimeout = 200;  // Very fast timeout
-            client.SendTimeout = 200;
+            var readTimeoutMs = ip == "127.0.0.1" ? 1000 : 3000; // Much longer for remote instances
+            client.ReceiveTimeout = readTimeoutMs;
+            client.SendTimeout = readTimeoutMs;
 
             using var stream = client.GetStream();
             using var writer = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
@@ -1397,7 +1394,6 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                             // Only log new instances
                             if (!_knownInstances.Contains(instance.Port))
                             {
-                                LogUtil.LogInfo($"Found new PokeBot instance on port {instance.Port}: {instance.BotType}", "WebServer");
                                 _knownInstances.Add(instance.Port);
                             }
                         }
@@ -1425,7 +1421,6 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                             // Only log new instances
                             if (!_knownInstances.Contains(instance.Port))
                             {
-                                LogUtil.LogInfo($"Found new RaidBot instance on port {instance.Port}: {instance.BotType}", "WebServer");
                                 _knownInstances.Add(instance.Port);
                             }
                         }
@@ -1451,7 +1446,6 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                     {
                         instances.Add(instance);
                         currentInstances.Add(port);
-                        LogUtil.LogInfo($"Found standard bot instance: {instance.Name} on port {port}", "WebServer");
                     }
                 }
                 catch (Exception ex)
@@ -1478,7 +1472,6 @@ public partial class BotServer(Main mainForm, int port = 8080, int tcpPort = 808
                         // Only log new instances
                         if (!_knownInstances.Contains(port))
                         {
-                            LogUtil.LogInfo($"Found new bot instance on port {port}: {instance.BotType}", "WebServer");
                             _knownInstances.Add(port);
                         }
                     }

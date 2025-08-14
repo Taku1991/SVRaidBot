@@ -131,7 +131,6 @@ public static class UpdateManager
         
         try
         {
-            LogUtil.LogInfo("Starting staged update process - Phase 1: Going to Idle", "UpdateManager");
             
             var instances = GetAllInstances(currentPort);
             result.TotalInstances = instances.Count;
@@ -159,11 +158,9 @@ public static class UpdateManager
             
             if (instancesNeedingUpdate.Count == 0)
             {
-                LogUtil.LogInfo("All instances are up to date", "UpdateManager");
                 return result;
             }
             
-            LogUtil.LogInfo($"Found {instancesNeedingUpdate.Count} instances that need updates - sending idle commands", "UpdateManager");
             
             // Phase 1: Send idle commands to all instances
             foreach (var instance in instancesNeedingUpdate)
@@ -199,7 +196,6 @@ public static class UpdateManager
                     if (idleSuccess)
                     {
                         result.UpdatesStarted++;
-                        LogUtil.LogInfo($"Sent idle command to {instance.BotType} instance on port {instance.Port}", "UpdateManager");
                     }
                     else
                     {
@@ -243,7 +239,6 @@ public static class UpdateManager
         
         try
         {
-            LogUtil.LogInfo("Starting sequential bot-by-bot update process - Phase 2: Execute Updates", "UpdateManager");
             
             var instances = GetAllInstances(currentPort);
             result.TotalInstances = instances.Count;
@@ -276,11 +271,9 @@ public static class UpdateManager
             
             if (instancesNeedingUpdate.Count == 0)
             {
-                LogUtil.LogInfo("No instances need updates or could not determine executable paths", "UpdateManager");
                 return result;
             }
             
-            LogUtil.LogInfo($"Starting sequential updates for {instancesNeedingUpdate.Count} instances", "UpdateManager");
             
             // Process each instance sequentially: Stop → Update → Restart
             foreach (var (processId, port, currentVersion, botType, executablePath) in instancesNeedingUpdate)
@@ -297,7 +290,6 @@ public static class UpdateManager
                 
                 try
                 {
-                    LogUtil.LogInfo($"Starting update sequence for {botType} on port {port}", "UpdateManager");
                     
                     // Step 1: Verify bot is idle and stop it
                     bool stopSuccess = await StopBotInstance(port, processId, currentPort == port, mainForm);
@@ -343,7 +335,6 @@ public static class UpdateManager
                     // Success!
                     instanceResult.UpdateStarted = true;
                     result.UpdatesStarted++;
-                    LogUtil.LogInfo($"Successfully updated and restarted {botType} on port {port}", "UpdateManager");
                     
                     // Wait a bit before processing next bot
                     await Task.Delay(3000);
@@ -359,7 +350,6 @@ public static class UpdateManager
                 result.InstanceResults.Add(instanceResult);
             }
             
-            LogUtil.LogInfo($"Update process completed. Success: {result.UpdatesStarted}, Failed: {result.UpdatesFailed}", "UpdateManager");
             return result;
         }
         catch (Exception ex)
@@ -400,7 +390,6 @@ public static class UpdateManager
 
             if (targetInstances.Count == 0)
             {
-                LogUtil.LogInfo($"No {targetBotType} instances found", "UpdateManager");
                 return result;
             }
 
@@ -408,7 +397,6 @@ public static class UpdateManager
             
             if (!updateAvailable || string.IsNullOrEmpty(latestVersion))
             {
-                LogUtil.LogInfo($"No updates available for {targetBotType}", "UpdateManager");
                 return result;
             }
 
@@ -429,7 +417,6 @@ public static class UpdateManager
                 };
                 
                 result.InstanceResults.Add(instanceResult);
-                LogUtil.LogInfo($"{targetBotType} instance {instance.Port} needs update from {instance.Version} to {latestVersion}", "UpdateManager");
             }
 
             return result;
@@ -587,7 +574,6 @@ public static class UpdateManager
     {
         try
         {
-            LogUtil.LogInfo($"Stopping bot instance on port {port}", "UpdateManager");
             
             if (isLocalInstance)
             {
@@ -613,7 +599,6 @@ public static class UpdateManager
                     var process = Process.GetProcessById(processId);
                     if (!process.HasExited)
                     {
-                        LogUtil.LogInfo($"Force killing process {processId}", "UpdateManager");
                         process.Kill();
                         await Task.Delay(2000);
                     }
@@ -706,7 +691,6 @@ public static class UpdateManager
     {
         try
         {
-            LogUtil.LogInfo($"Restarting bot instance: {executablePath}", "UpdateManager");
             
             var workingDirectory = Path.GetDirectoryName(executablePath);
             

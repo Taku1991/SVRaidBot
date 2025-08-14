@@ -32,10 +32,8 @@ public static class WebApiExtensions
         {
             if (IsPortInUse(WebPort))
             {
-                LogUtil.LogInfo($"Web port {WebPort} is in use by another bot instance. Starting as slave...", "WebServer");
                 _tcpPort = FindAvailablePort(8081);
                 StartTcpOnly();
-                LogUtil.LogInfo($"Slave instance started with TCP port {_tcpPort}. Monitoring master...", "WebServer");
 
                 // Start monitoring for master failure
                 StartMasterMonitor();
@@ -46,9 +44,7 @@ public static class WebApiExtensions
             TryAddUrlReservation(WebPort);
 
             _tcpPort = FindAvailablePort(8081);
-            LogUtil.LogInfo($"Starting as master web server on port {WebPort} with TCP port {_tcpPort}", "WebServer");
             StartFullServer();
-            LogUtil.LogInfo($"Web interface is available at http://localhost:{WebPort}", "WebServer");
         }
         catch (Exception ex)
         {
@@ -73,7 +69,6 @@ public static class WebApiExtensions
 
                     if (!IsPortInUse(WebPort))
                     {
-                        LogUtil.LogInfo("Master web server is down. Attempting to take over...", "WebServer");
 
                         // Wait a random amount to reduce race conditions between multiple slaves
                         await Task.Delay(random.Next(1000, 3000));
@@ -109,8 +104,6 @@ public static class WebApiExtensions
             _monitorCts?.Cancel();
             _monitorCts = null;
 
-            LogUtil.LogInfo($"Successfully took over as master web server on port {WebPort}", "WebServer");
-            LogUtil.LogInfo($"Web interface is now available at http://localhost:{WebPort}", "WebServer");
 
             // Show notification to user if possible
             if (_main != null)
@@ -326,14 +319,12 @@ public static class WebApiExtensions
 
                     if (updateAvailable && !string.IsNullOrEmpty(newVersion))
                     {
-                        LogUtil.LogInfo($"Starting automatic {botTypeString} update to version {newVersion}", "WebAPI");
                         
                         // Use automatic update instead of UpdateForm
                         await UpdateManager.PerformAutomaticUpdate(botTypeString, newVersion);
                     }
                     else
                     {
-                        LogUtil.LogInfo($"No {botTypeString} update available", "WebAPI");
                     }
                 }
                 catch (Exception ex)
@@ -559,7 +550,6 @@ public static class WebApiExtensions
             var exeDir = Path.GetDirectoryName(exePath) ?? Program.WorkingDirectory;
             var portFile = Path.Combine(exeDir, $"SVRaidBot_{Environment.ProcessId}.port");
             File.WriteAllText(portFile, _tcpPort.ToString());
-            LogUtil.LogInfo($"Created port file: {portFile} with TCP port {_tcpPort}", "WebServer");
         }
         catch (Exception ex)
         {
