@@ -356,5 +356,5 @@ MigrationBackup/
 SysBot.Pokemon/SV/BotEncounter/EncounterBotSettings.cs
 SysBot.Pokemon/SV/BotEncounter/EncounterBotReset.cs
 
-#docs
+# docs
 /docs/

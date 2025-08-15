@@ -13,11 +13,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using SysBot.Base;
+using SysBot.Pokemon;
 using SysBot.Pokemon.WinForms.WebApi.Models;
 
 namespace SysBot.Pokemon.WinForms.WebApi;
 
-public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDisposable
+public partial class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDisposable
 {
     private HttpListener? _listener;
     private Thread? _listenerThread;
@@ -27,6 +28,12 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
     private readonly Main _mainForm = mainForm ?? throw new ArgumentNullException(nameof(mainForm));
     private volatile bool _running;
     private string? _htmlTemplate;
+
+    // Instance caching for /api/bot/instances
+    private readonly object _instanceCacheLock = new();
+    private List<BotInstance>? _cachedInstances;
+    private DateTime _lastCacheUpdate;
+    private readonly TimeSpan _cacheTimeout = TimeSpan.FromSeconds(2);
 
     private string HtmlTemplate
     {
@@ -540,8 +547,8 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
                     var localInstance = CreateLocalInstance();
                     var result = new List<BotInstance> { localInstance };
                     
-                    // Add cached remote instances
-                    result.AddRange(_cachedInstances.Where(i => !i.IsLocal));
+                    // Add cached non-local instances (exclude current process)
+                    result.AddRange(_cachedInstances.Where(i => i.ProcessId != Environment.ProcessId));
                     
                     return JsonSerializer.Serialize(new { Instances = result });
                 }
@@ -583,7 +590,7 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
             
             var debugInfo = new
             {
-                ConfigExists = config != null,
+                ConfigExists = config is not null,
                 ConfigMode = config?.Mode.ToString(),
                 ControllerCount = controllers?.Count ?? 0,
                 TcpPort = _tcpPort,
@@ -592,12 +599,12 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
                     localInstance.ProcessId,
                     localInstance.Name,
                     localInstance.Port,
-                    localInstance.IP,
+                    // No IP field on BotInstance currently
                     localInstance.Version,
                     localInstance.Mode,
                     localInstance.BotCount,
                     localInstance.IsOnline,
-                    localInstance.BotType
+                    // No BotType field on BotInstance currently
                 },
                 RawGetInstancesResponse = GetInstances()
             };
@@ -627,70 +634,35 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
                 var versionField = svRaidBotType.GetField("Version",
                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
                 if (versionField != null)
-                {
                     version = versionField.GetValue(null)?.ToString() ?? "Unknown";
-                }
             }
 
             if (version == "Unknown")
-            {
                 version = _mainForm.GetType().Assembly.GetName().Version?.ToString() ?? "1.0.0";
-            }
         }
         catch
         {
             version = _mainForm.GetType().Assembly.GetName().Version?.ToString() ?? "1.0.0";
         }
 
-        var botStatuses = controllers.Select(c => new BotStatusInfo
+        var botStatuses = new List<BotStatusInfo>();
+        foreach (var c in controllers)
         {
-            var config = GetConfig();
-            var controllers = GetBotControllers();
-
-            var mode = config?.Mode.ToString() ?? "Unknown";
-            var botType = DetectLocalBotType();
-            var name = GetBotName(config, botType);
-
-            var version = GetVersionForBotType(botType);
-
-            // Reduced logging - only log when instance is created for the first time
-
-            var botStatuses = controllers?.Select(c => 
+            try
             {
-                try
+                botStatuses.Add(new BotStatusInfo
                 {
-                    return new BotStatusInfo
-                    {
-                        Name = GetBotName(c.State, config),
-                        Status = c.ReadBotState()
-                    };
-                }
-                catch
-                {
-                    return new BotStatusInfo { Name = "Unknown", Status = "Error" };
-                }
-            }).ToList() ?? new List<BotStatusInfo>();
-
-            var instance = new BotInstance
+                    Name = GetBotName(c.State, config),
+                    Status = c.ReadBotState()
+                });
+            }
+            catch
             {
-                ProcessId = Environment.ProcessId,
-                Name = name ?? "SVRaidBot",
-                Port = _tcpPort,
-                WebPort = GetWebPortForTcpPort(_tcpPort),
-                IP = "127.0.0.1",
-                Version = version,
-                Mode = mode,
-                BotCount = botStatuses.Count,
-                IsOnline = true,
-                IsMaster = true,
-                IsRemote = false,
-                BotStatuses = botStatuses,
-                BotType = botType.ToString()
-            };
-
-            return instance;
+                botStatuses.Add(new BotStatusInfo { Name = "Unknown", Status = "Error" });
+            }
         }
-        catch (Exception ex)
+
+        return new BotInstance
         {
             ProcessId = Environment.ProcessId,
             Name = name,
@@ -703,6 +675,9 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
             BotStatuses = botStatuses
         };
     }
+
+    // Provide a simple fast scan: in this context identical to full scan
+    private static List<BotInstance> ScanRemoteInstancesFast() => ScanRemoteInstances();
 
     private static List<BotInstance> ScanRemoteInstances()
     {
