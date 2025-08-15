@@ -1,8 +1,6 @@
 ﻿using PKHeX.Core;
 using SysBot.Base;
 using SysBot.Pokemon.SV.BotRaid.Helpers;
-using SysBot.Pokemon.WinForms.WebApi;
-// using SysBot.Web;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -119,10 +117,6 @@ namespace SysBot.Pokemon.WinForms
             trayIcon.Text = (Config?.Hub?.BotName != null && !string.IsNullOrEmpty(Config.Hub.BotName)) ? Config.Hub.BotName : "S/V RaidBot";
             _ = Task.Run(BotMonitor);
             InitUtil.InitializeStubs(Config.Mode);
-            
-            // Starte die Web-API
-            // WebApiIntegration.StartWebApi(RunningEnvironment, 6500);
-
             // Start periodic update checks
             StartUpdateCheckTimer();
 
