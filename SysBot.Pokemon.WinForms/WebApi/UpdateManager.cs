@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using SysBot.Base;
+using SysBot.Pokemon.SV.BotRaid.Helpers;
 
 namespace SysBot.Pokemon.WinForms.WebApi;
 
@@ -29,31 +30,33 @@ public static class UpdateManager
         public bool NeedsUpdate { get; set; }
         public bool UpdateStarted { get; set; }
         public string? Error { get; set; }
-        public string BotType { get; set; } = "Unknown";
-    }
-
-    public enum BotType
-    {
-        PokeBot,
-        RaidBot,
-        Unknown
     }
 
     public static async Task<UpdateAllResult> UpdateAllInstancesAsync(Main mainForm, int currentPort)
     {
         var result = new UpdateAllResult();
 
+        var (updateAvailable, _, latestVersion) = await UpdateChecker.CheckForUpdatesAsync(false);
+        if (string.IsNullOrEmpty(latestVersion))
+        {
+            result.UpdatesFailed = 1;
+            result.InstanceResults.Add(new InstanceUpdateResult
+            {
+                Error = "Failed to fetch latest version"
+            });
+            return result;
+        }
+
         var instances = GetAllInstances(currentPort);
         result.TotalInstances = instances.Count;
 
-        var instancesNeedingUpdate = new List<(int ProcessId, int Port, string Version, BotType BotType)>();
+        var instancesNeedingUpdate = new List<(int ProcessId, int Port, string Version)>();
 
         foreach (var instance in instances)
         {
-            var latestVersion = await GetLatestVersionForBotType(instance.BotType);
-            if (!string.IsNullOrEmpty(latestVersion) && instance.Version != latestVersion)
+            if (instance.Version != latestVersion)
             {
-                instancesNeedingUpdate.Add((instance.ProcessId, instance.Port, instance.Version, instance.BotType));
+                instancesNeedingUpdate.Add(instance);
                 result.UpdatesNeeded++;
             }
         }
@@ -65,7 +68,7 @@ public static class UpdateManager
 
         LogUtil.LogInfo($"Idling all bots across {instancesNeedingUpdate.Count} instances before updates...", "UpdateManager");
 
-        foreach (var (processId, port, version, botType) in instancesNeedingUpdate)
+        foreach (var (processId, port, version) in instancesNeedingUpdate)
         {
             if (processId == Environment.ProcessId)
             {
@@ -97,15 +100,15 @@ public static class UpdateManager
 
         LogUtil.LogInfo("Waiting for all bots to finish current operations and go idle...", "UpdateManager");
 
-        var allInstances = instances.Select(i => (i.ProcessId, i.Port, i.Version, i.BotType)).ToList();
+        // Pass ALL instances to check, not just ones needing update
+        var allInstances = instances.Select(i => (i.ProcessId, i.Port, i.Version)).ToList();
         var allIdle = await WaitForAllInstancesToBeIdle(mainForm, allInstances, 300);
 
         if (!allIdle)
         {
             result.UpdatesFailed = instancesNeedingUpdate.Count;
-            foreach (var (processId, port, version, botType) in instancesNeedingUpdate)
+            foreach (var (processId, port, version) in instancesNeedingUpdate)
             {
-                var latestVersion = await GetLatestVersionForBotType(botType);
                 result.InstanceResults.Add(new InstanceUpdateResult
                 {
                     Port = port,
@@ -113,8 +116,7 @@ public static class UpdateManager
                     CurrentVersion = version,
                     LatestVersion = latestVersion,
                     NeedsUpdate = true,
-                    Error = "Timeout waiting for all instances to idle - updates cancelled",
-                    BotType = botType.ToString()
+                    Error = "Timeout waiting for all instances to idle - updates cancelled"
                 });
             }
             return result;
@@ -125,50 +127,40 @@ public static class UpdateManager
             .Concat(instancesNeedingUpdate.Where(i => i.ProcessId == Environment.ProcessId))
             .ToList();
 
-        foreach (var (processId, port, currentVersion, botType) in sortedInstances)
+        foreach (var (processId, port, currentVersion) in sortedInstances)
         {
-            var latestVersion = await GetLatestVersionForBotType(botType);
             var instanceResult = new InstanceUpdateResult
             {
                 Port = port,
                 ProcessId = processId,
                 CurrentVersion = currentVersion,
                 LatestVersion = latestVersion,
-                NeedsUpdate = true,
-                BotType = botType.ToString()
+                NeedsUpdate = true
             };
 
             try
             {
                 if (processId == Environment.ProcessId)
                 {
-                    var updateForm = await CreateUpdateFormForBotType(botType, latestVersion);
-                    if (updateForm != null)
+                    var updateForm = new UpdateForm(false, latestVersion, true);
+                    mainForm.BeginInvoke((MethodInvoker)(() =>
                     {
-                        mainForm.BeginInvoke((MethodInvoker)(() =>
-                        {
-                            updateForm.PerformUpdate();
-                        }));
+                        updateForm.PerformUpdate();
+                    }));
 
-                        instanceResult.UpdateStarted = true;
-                        result.UpdatesStarted++;
-                        LogUtil.LogInfo($"Master instance ({botType}) update triggered", "UpdateManager");
-                    }
-                    else
-                    {
-                        instanceResult.Error = $"Could not create update form for {botType}";
-                        result.UpdatesFailed++;
-                    }
+                    instanceResult.UpdateStarted = true;
+                    result.UpdatesStarted++;
+                    LogUtil.LogInfo("Master instance update triggered", "UpdateManager");
                 }
                 else
                 {
-                    LogUtil.LogInfo($"Triggering update for {botType} instance on port {port}...", "UpdateManager");
+                    LogUtil.LogInfo($"Triggering update for instance on port {port}...", "UpdateManager");
                     var updateResponse = BotServer.QueryRemote(port, "UPDATE");
                     if (!updateResponse.StartsWith("ERROR"))
                     {
                         instanceResult.UpdateStarted = true;
                         result.UpdatesStarted++;
-                        LogUtil.LogInfo($"Update triggered for {botType} instance on port {port}", "UpdateManager");
+                        LogUtil.LogInfo($"Update triggered for instance on port {port}", "UpdateManager");
                         await Task.Delay(5000);
                     }
                     else
@@ -182,7 +174,7 @@ public static class UpdateManager
             {
                 instanceResult.Error = ex.Message;
                 result.UpdatesFailed++;
-                LogUtil.LogError($"Error updating {botType} instance on port {port}: {ex.Message}", "UpdateManager");
+                LogUtil.LogError($"Error updating instance on port {port}: {ex.Message}", "UpdateManager");
             }
 
             result.InstanceResults.Add(instanceResult);
@@ -195,17 +187,27 @@ public static class UpdateManager
     {
         var result = new UpdateAllResult();
 
+        var (updateAvailable, _, latestVersion) = await UpdateChecker.CheckForUpdatesAsync(false);
+        if (string.IsNullOrEmpty(latestVersion))
+        {
+            result.UpdatesFailed = 1;
+            result.InstanceResults.Add(new InstanceUpdateResult
+            {
+                Error = "Failed to fetch latest version"
+            });
+            return result;
+        }
+
         var instances = GetAllInstances(currentPort);
         result.TotalInstances = instances.Count;
 
-        var instancesNeedingUpdate = new List<(int ProcessId, int Port, string Version, BotType BotType)>();
+        var instancesNeedingUpdate = new List<(int ProcessId, int Port, string Version)>();
 
         foreach (var instance in instances)
         {
-            var latestVersion = await GetLatestVersionForBotType(instance.BotType);
-            if (!string.IsNullOrEmpty(latestVersion) && instance.Version != latestVersion)
+            if (instance.Version != latestVersion)
             {
-                instancesNeedingUpdate.Add((instance.ProcessId, instance.Port, instance.Version, instance.BotType));
+                instancesNeedingUpdate.Add(instance);
                 result.UpdatesNeeded++;
                 result.InstanceResults.Add(new InstanceUpdateResult
                 {
@@ -213,8 +215,7 @@ public static class UpdateManager
                     ProcessId = instance.ProcessId,
                     CurrentVersion = instance.Version,
                     LatestVersion = latestVersion,
-                    NeedsUpdate = true,
-                    BotType = instance.BotType.ToString()
+                    NeedsUpdate = true
                 });
             }
         }
@@ -224,9 +225,10 @@ public static class UpdateManager
             return result;
         }
 
+        // Start idling all bots
         LogUtil.LogInfo($"Idling all bots across {instancesNeedingUpdate.Count} instances before updates...", "UpdateManager");
 
-        foreach (var (processId, port, version, botType) in instancesNeedingUpdate)
+        foreach (var (processId, port, version) in instancesNeedingUpdate)
         {
             if (processId == Environment.ProcessId)
             {
@@ -256,6 +258,7 @@ public static class UpdateManager
             }
         }
 
+        // Return immediately after starting the idle process
         return result;
     }
 
@@ -263,17 +266,9 @@ public static class UpdateManager
     {
         var result = new UpdateAllResult();
 
+        var (updateAvailable, _, latestVersion) = await UpdateChecker.CheckForUpdatesAsync(false);
         var instances = GetAllInstances(currentPort);
-        var instancesNeedingUpdate = new List<(int ProcessId, int Port, string Version, BotType BotType)>();
-
-        foreach (var instance in instances)
-        {
-            var latestVersion = await GetLatestVersionForBotType(instance.BotType);
-            if (!string.IsNullOrEmpty(latestVersion) && instance.Version != latestVersion)
-            {
-                instancesNeedingUpdate.Add((instance.ProcessId, instance.Port, instance.Version, instance.BotType));
-            }
-        }
+        var instancesNeedingUpdate = instances.Where(i => i.Version != latestVersion).ToList();
 
         result.TotalInstances = instances.Count;
         result.UpdatesNeeded = instancesNeedingUpdate.Count;
@@ -283,50 +278,40 @@ public static class UpdateManager
             .Concat(instancesNeedingUpdate.Where(i => i.ProcessId == Environment.ProcessId))
             .ToList();
 
-        foreach (var (processId, port, currentVersion, botType) in sortedInstances)
+        foreach (var (processId, port, currentVersion) in sortedInstances)
         {
-            var latestVersion = await GetLatestVersionForBotType(botType);
             var instanceResult = new InstanceUpdateResult
             {
                 Port = port,
                 ProcessId = processId,
                 CurrentVersion = currentVersion,
                 LatestVersion = latestVersion,
-                NeedsUpdate = true,
-                BotType = botType.ToString()
+                NeedsUpdate = true
             };
 
             try
             {
                 if (processId == Environment.ProcessId)
                 {
-                    var updateForm = await CreateUpdateFormForBotType(botType, latestVersion);
-                    if (updateForm != null)
+                    var updateForm = new UpdateForm(false, latestVersion, true);
+                    mainForm.BeginInvoke((MethodInvoker)(() =>
                     {
-                        mainForm.BeginInvoke((MethodInvoker)(() =>
-                        {
-                            updateForm.PerformUpdate();
-                        }));
+                        updateForm.PerformUpdate();
+                    }));
 
-                        instanceResult.UpdateStarted = true;
-                        result.UpdatesStarted++;
-                        LogUtil.LogInfo($"Master instance ({botType}) update triggered", "UpdateManager");
-                    }
-                    else
-                    {
-                        instanceResult.Error = $"Could not create update form for {botType}";
-                        result.UpdatesFailed++;
-                    }
+                    instanceResult.UpdateStarted = true;
+                    result.UpdatesStarted++;
+                    LogUtil.LogInfo("Master instance update triggered", "UpdateManager");
                 }
                 else
                 {
-                    LogUtil.LogInfo($"Triggering update for {botType} instance on port {port}...", "UpdateManager");
+                    LogUtil.LogInfo($"Triggering update for instance on port {port}...", "UpdateManager");
                     var updateResponse = BotServer.QueryRemote(port, "UPDATE");
                     if (!updateResponse.StartsWith("ERROR"))
                     {
                         instanceResult.UpdateStarted = true;
                         result.UpdatesStarted++;
-                        LogUtil.LogInfo($"Update triggered for {botType} instance on port {port}", "UpdateManager");
+                        LogUtil.LogInfo($"Update triggered for instance on port {port}", "UpdateManager");
                         await Task.Delay(5000);
                     }
                     else
@@ -340,7 +325,7 @@ public static class UpdateManager
             {
                 instanceResult.Error = ex.Message;
                 result.UpdatesFailed++;
-                LogUtil.LogError($"Error updating {botType} instance on port {port}: {ex.Message}", "UpdateManager");
+                LogUtil.LogError($"Error updating instance on port {port}: {ex.Message}", "UpdateManager");
             }
 
             result.InstanceResults.Add(instanceResult);
@@ -349,7 +334,7 @@ public static class UpdateManager
         return result;
     }
 
-    private static async Task<bool> WaitForAllInstancesToBeIdle(Main mainForm, List<(int ProcessId, int Port, string Version, BotType BotType)> instances, int timeoutSeconds)
+    private static async Task<bool> WaitForAllInstancesToBeIdle(Main mainForm, List<(int ProcessId, int Port, string Version)> instances, int timeoutSeconds)
     {
         var endTime = DateTime.Now.AddSeconds(timeoutSeconds);
         const int delayMs = 1000;
@@ -359,7 +344,7 @@ public static class UpdateManager
             var allInstancesIdle = true;
             var statusReport = new List<string>();
 
-            foreach (var (processId, port, version, botType) in instances)
+            foreach (var (processId, port, version) in instances)
             {
                 if (processId == Environment.ProcessId)
                 {
@@ -379,7 +364,7 @@ public static class UpdateManager
                         {
                             allInstancesIdle = false;
                             var states = notIdle.Select(c => c.ReadBotState()).Distinct();
-                            statusReport.Add($"Master ({botType}): {string.Join(", ", states)}");
+                            statusReport.Add($"Master: {string.Join(", ", states)}");
                         }
                     }
                 }
@@ -409,7 +394,7 @@ public static class UpdateManager
                                 {
                                     allInstancesIdle = false;
                                     var states = notIdle.Select(b => b.TryGetValue("Status", out var s) ? s?.ToString() : "Unknown").Distinct();
-                                    statusReport.Add($"Port {port} ({botType}): {string.Join(", ", states)}");
+                                    statusReport.Add($"Port {port}: {string.Join(", ", states)}");
                                 }
                             }
                         }
@@ -431,43 +416,41 @@ public static class UpdateManager
         return false;
     }
 
-    private static List<(int ProcessId, int Port, string Version, BotType BotType)> GetAllInstances(int currentPort)
+    private static List<(int ProcessId, int Port, string Version)> GetAllInstances(int currentPort)
     {
-        var instances = new List<(int, int, string, BotType)>();
-
-        // Add current instance
-        var currentBotType = DetectCurrentBotType();
-        var currentVersion = GetVersionForBotType(currentBotType);
-        instances.Add((Environment.ProcessId, currentPort, currentVersion, currentBotType));
+        var instances = new List<(int, int, string)>
+        {
+            (Environment.ProcessId, currentPort, SVRaidBot.Version)
+        };
 
         try
         {
-            // Scan for PokeBot processes
-            var pokeBotProcesses = Process.GetProcessesByName("PokeBot")
+            var processes = Process.GetProcessesByName("SVRaidBot")
                 .Where(p => p.Id != Environment.ProcessId);
 
-            foreach (var process in pokeBotProcesses)
+            foreach (var process in processes)
             {
                 try
                 {
-                    var instance = TryGetInstanceInfo(process, BotType.PokeBot);
-                    if (instance.HasValue)
-                        instances.Add(instance.Value);
-                }
-                catch { }
-            }
+                    var exePath = process.MainModule?.FileName;
+                    if (string.IsNullOrEmpty(exePath))
+                        continue;
 
-            // Scan for RaidBot processes  
-            var raidBotProcesses = Process.GetProcessesByName("SysBot")
-                .Where(p => p.Id != Environment.ProcessId);
+                    var portFile = Path.Combine(Path.GetDirectoryName(exePath)!, $"SVRaidBot_{process.Id}.port");
+                    if (!File.Exists(portFile))
+                        continue;
 
-            foreach (var process in raidBotProcesses)
-            {
-                try
-                {
-                    var instance = TryGetInstanceInfo(process, BotType.RaidBot);
-                    if (instance.HasValue)
-                        instances.Add(instance.Value);
+                    var portText = File.ReadAllText(portFile).Trim();
+                    if (!int.TryParse(portText, out var port))
+                        continue;
+
+                    if (!IsPortOpen(port))
+                        continue;
+
+                    var versionResponse = BotServer.QueryRemote(port, "VERSION");
+                    var version = versionResponse.StartsWith("ERROR") ? "Unknown" : versionResponse.Trim();
+
+                    instances.Add((process.Id, port, version));
                 }
                 catch { }
             }
@@ -477,565 +460,13 @@ public static class UpdateManager
         return instances;
     }
 
-    private static (int, int, string, BotType)? TryGetInstanceInfo(Process process, BotType expectedBotType)
-    {
-        try
-        {
-            var exePath = process.MainModule?.FileName;
-            if (string.IsNullOrEmpty(exePath))
-                return null;
-
-            var portFileName = expectedBotType == BotType.PokeBot 
-                ? $"PokeBot_{process.Id}.port" 
-                : $"SVRaidBot_{process.Id}.port";
-
-            var portFile = Path.Combine(Path.GetDirectoryName(exePath)!, portFileName);
-            if (!File.Exists(portFile))
-                return null;
-
-            var portText = File.ReadAllText(portFile).Trim();
-            if (!int.TryParse(portText, out var port))
-                return null;
-
-            if (!IsPortOpen(port))
-                return null;
-
-            var versionResponse = BotServer.QueryRemote(port, "VERSION");
-            var version = versionResponse.StartsWith("ERROR") ? "Unknown" : versionResponse.Trim();
-
-            return (process.Id, port, version, expectedBotType);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static BotType DetectCurrentBotType()
-    {
-        try
-        {
-            // Try to detect RaidBot first (since this is in RaidBot folder)
-            var raidBotType = Type.GetType("SysBot.Pokemon.SV.BotRaid.Helpers.SVRaidBot, SysBot.Pokemon");
-            if (raidBotType != null)
-                return BotType.RaidBot;
-
-            // Try to detect PokeBot
-            var pokeBotType = Type.GetType("SysBot.Pokemon.Helpers.PokeBot, SysBot.Pokemon");
-            if (pokeBotType != null)
-                return BotType.PokeBot;
-
-            return BotType.Unknown;
-        }
-        catch
-        {
-            return BotType.Unknown;
-        }
-    }
-
-    private static string GetVersionForBotType(BotType botType)
-    {
-        try
-        {
-            return botType switch
-            {
-                BotType.PokeBot => GetPokeBotVersion(),
-                BotType.RaidBot => GetRaidBotVersion(),
-                _ => "Unknown"
-            };
-        }
-        catch
-        {
-            return "Unknown";
-        }
-    }
-
-    private static string GetPokeBotVersion()
-    {
-        try
-        {
-            var pokeBotType = Type.GetType("SysBot.Pokemon.Helpers.PokeBot, SysBot.Pokemon");
-            if (pokeBotType != null)
-            {
-                var versionField = pokeBotType.GetField("Version",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                if (versionField != null)
-                {
-                    return versionField.GetValue(null)?.ToString() ?? "Unknown";
-                }
-            }
-            return "Unknown";
-        }
-        catch
-        {
-            return "Unknown";
-        }
-    }
-
-    private static string GetRaidBotVersion()
-    {
-        try
-        {
-            var raidBotType = Type.GetType("SysBot.Pokemon.SV.BotRaid.Helpers.SVRaidBot, SysBot.Pokemon");
-            if (raidBotType != null)
-            {
-                var versionField = raidBotType.GetField("Version",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                if (versionField != null)
-                {
-                    return versionField.GetValue(null)?.ToString() ?? "Unknown";
-                }
-            }
-            return "Unknown";
-        }
-        catch
-        {
-            return "Unknown";
-        }
-    }
-
-    private static async Task<string> GetLatestVersionForBotType(BotType botType)
-    {
-        try
-        {
-            return botType switch
-            {
-                BotType.PokeBot => await GetLatestPokeBotVersion(),
-                BotType.RaidBot => await GetLatestRaidBotVersion(),
-                _ => ""
-            };
-        }
-        catch
-        {
-            return "";
-        }
-    }
-
-    private static async Task<string> GetLatestPokeBotVersion()
-    {
-        try
-        {
-            var (updateAvailable, _, latestVersion) = await PokeBotUpdateChecker.CheckForUpdatesAsync(false);
-            return updateAvailable ? latestVersion ?? "Unknown" : "Unknown";
-        }
-        catch (Exception ex)
-        {
-            LogUtil.LogError($"Error getting latest PokeBot version: {ex.Message}", "UpdateManager");
-            return "Unknown";
-        }
-    }
-
-    private static async Task<string> GetLatestRaidBotVersion()
-    {
-        try
-        {
-            var (updateAvailable, _, latestVersion) = await RaidBotUpdateChecker.CheckForUpdatesAsync(false);
-            return updateAvailable ? latestVersion ?? "Unknown" : "Unknown";
-        }
-        catch (Exception ex)
-        {
-            LogUtil.LogError($"Error getting latest RaidBot version: {ex.Message}", "UpdateManager");
-            return "Unknown";
-        }
-    }
-
-    public static async Task<bool> PerformAutomaticUpdate(string botType, string latestVersion)
-    {
-        try
-        {
-            LogUtil.LogInfo($"Starting automatic {botType} update to version {latestVersion}", "UpdateManager");
-
-            string? downloadUrl = null;
-            
-            // Get download URL based on bot type
-            if (botType == "PokeBot")
-            {
-                downloadUrl = await PokeBotUpdateChecker.FetchDownloadUrlAsync();
-            }
-            else if (botType == "RaidBot")
-            {
-                downloadUrl = await RaidBotUpdateChecker.FetchDownloadUrlAsync();
-            }
-
-            if (string.IsNullOrWhiteSpace(downloadUrl))
-            {
-                LogUtil.LogError($"Failed to fetch download URL for {botType}", "UpdateManager");
-                return false;
-            }
-
-            LogUtil.LogInfo($"Downloading {botType} update from: {downloadUrl}", "UpdateManager");
-
-            // Download new version
-            string tempPath = await DownloadUpdateAsync(downloadUrl, botType);
-            if (string.IsNullOrEmpty(tempPath))
-            {
-                LogUtil.LogError($"Failed to download {botType} update", "UpdateManager");
-                return false;
-            }
-
-            LogUtil.LogInfo($"Download completed: {tempPath}", "UpdateManager");
-
-            // Install update automatically
-            bool installSuccess = await InstallUpdateAutomatically(tempPath, botType);
-            
-            if (installSuccess)
-            {
-                LogUtil.LogInfo($"Automatic {botType} update completed successfully", "UpdateManager");
-            }
-            else
-            {
-                LogUtil.LogError($"Failed to install {botType} update", "UpdateManager");
-            }
-
-            return installSuccess;
-        }
-        catch (Exception ex)
-        {
-            LogUtil.LogError($"Automatic {botType} update failed: {ex.Message}", "UpdateManager");
-            return false;
-        }
-    }
-
-    private static async Task<string> DownloadUpdateAsync(string downloadUrl, string botType)
-    {
-        try
-        {
-            string tempPath = Path.Combine(Path.GetTempPath(), $"SysBot.Pokemon.WinForms_{botType}_{Guid.NewGuid()}.exe");
-
-            using (var client = new System.Net.Http.HttpClient())
-            {
-                client.DefaultRequestHeaders.Add("User-Agent", "SysBot-AutoUpdate");
-                client.Timeout = TimeSpan.FromMinutes(10); // 10 Minuten Timeout für Download
-                
-                LogUtil.LogInfo($"Starting download to: {tempPath}", "UpdateManager");
-                
-                var response = await client.GetAsync(downloadUrl);
-                response.EnsureSuccessStatusCode();
-                var fileBytes = await response.Content.ReadAsByteArrayAsync();
-                
-                await File.WriteAllBytesAsync(tempPath, fileBytes);
-                
-                LogUtil.LogInfo($"Download completed successfully. File size: {fileBytes.Length} bytes", "UpdateManager");
-                return tempPath;
-            }
-        }
-        catch (Exception ex)
-        {
-            LogUtil.LogError($"Download failed: {ex.Message}", "UpdateManager");
-            return string.Empty;
-        }
-    }
-
-    private static async Task<bool> InstallUpdateAutomatically(string downloadedFilePath, string botType)
-    {
-        try
-        {
-            string currentExePath = Application.ExecutablePath;
-            string applicationDirectory = Path.GetDirectoryName(currentExePath) ?? "";
-            string executableName = Path.GetFileName(currentExePath);
-            string backupPath = Path.Combine(applicationDirectory, $"{executableName}.backup");
-
-            LogUtil.LogInfo($"Installing {botType} update: {downloadedFilePath} -> {currentExePath}", "UpdateManager");
-
-            // Create enhanced batch file for automatic update
-            string batchPath = Path.Combine(Path.GetTempPath(), $"AutoUpdate_{botType}_{Environment.ProcessId}.bat");
-            string batchContent = $@"
-@echo off
-echo Starting automatic {botType} update...
-
-rem Wait for current process to terminate
-timeout /t 3 /nobreak >nul
-
-rem Kill any remaining SysBot processes (safety measure)
-taskkill /f /im ""{executableName}"" 2>nul
-
-rem Wait a bit more
-timeout /t 2 /nobreak >nul
-
-rem Create backup of current version
-if exist ""{currentExePath}"" (
-    echo Creating backup...
-    if exist ""{backupPath}"" (
-        del ""{backupPath}"" 2>nul
-    )
-    move ""{currentExePath}"" ""{backupPath}"" 2>nul
-)
-
-rem Install new version
-echo Installing new version...
-move ""{downloadedFilePath}"" ""{currentExePath}""
-
-rem Verify installation
-if exist ""{currentExePath}"" (
-    echo Update installed successfully
-    
-    rem Wait for file system to settle
-    timeout /t 2 /nobreak >nul
-    
-    rem Start new version
-    echo Starting updated application...
-    start """" ""{currentExePath}""
-    
-    echo {botType} update completed successfully
-) else (
-    echo Update failed - restoring backup
-    if exist ""{backupPath}"" (
-        move ""{backupPath}"" ""{currentExePath}""
-        start """" ""{currentExePath}""
-    )
-)
-
-rem Clean up batch file
-timeout /t 3 /nobreak >nul
-del ""%~f0"" 2>nul
-";
-
-            await File.WriteAllTextAsync(batchPath, batchContent);
-            LogUtil.LogInfo($"Created update batch file: {batchPath}", "UpdateManager");
-
-            // Start the update batch file
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = batchPath,
-                CreateNoWindow = true,
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            };
-
-            LogUtil.LogInfo($"Starting automatic update process for {botType}...", "UpdateManager");
-            Process.Start(startInfo);
-
-            // Give the batch file a moment to start
-            await Task.Delay(1000);
-
-            // Trigger orderly shutdown of the main form
-            LogUtil.LogInfo($"Triggering orderly shutdown for {botType} update", "UpdateManager");
-            
-            // Use BeginInvoke to call Close() on the UI thread, which triggers proper cleanup
-            if (Application.OpenForms.Count > 0 && Application.OpenForms[0] is Main mainForm)
-            {
-                mainForm.BeginInvoke((MethodInvoker)(() =>
-                {
-                    // Set the flag to indicate this is a real close (not minimize to tray)
-                    var isReallyClosingField = mainForm.GetType().GetField("_isReallyClosing",
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    isReallyClosingField?.SetValue(mainForm, true);
-                    
-                    // Set IsUpdating flag to bypass some close logic
-                    var isUpdatingProperty = mainForm.GetType().GetProperty("IsUpdating",
-                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                    isUpdatingProperty?.SetValue(null, true);
-                    
-                    // Close the form properly, which triggers all cleanup
-                    mainForm.Close();
-                }));
-            }
-            else
-            {
-                // Fallback to Application.Exit if we can't find the main form
-                LogUtil.LogInfo("Could not find main form, using Application.Exit as fallback", "UpdateManager");
-                Application.Exit();
-            }
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LogUtil.LogError($"Failed to install {botType} update: {ex.Message}", "UpdateManager");
-            return false;
-        }
-    }
-
-    public static async Task<UpdateAllResult> StartPokeBotUpdateAsync(Main mainForm, int currentPort)
-    {
-        return await StartSpecificBotTypeUpdateAsync(mainForm, currentPort, BotType.PokeBot);
-    }
-
-    public static async Task<UpdateAllResult> StartRaidBotUpdateAsync(Main mainForm, int currentPort)
-    {
-        return await StartSpecificBotTypeUpdateAsync(mainForm, currentPort, BotType.RaidBot);
-    }
-
-    private static async Task<UpdateAllResult> StartSpecificBotTypeUpdateAsync(Main mainForm, int currentPort, BotType botType)
-    {
-        var result = new UpdateAllResult();
-
-        var instances = GetAllInstances(currentPort);
-        var targetInstances = instances.Where(i => i.BotType == botType).ToList();
-        
-        if (targetInstances.Count == 0)
-        {
-            LogUtil.LogInfo($"No {botType} instances found", "UpdateManager");
-            return result;
-        }
-
-        result.TotalInstances = targetInstances.Count;
-
-        var instancesNeedingUpdate = new List<(int ProcessId, int Port, string Version, BotType BotType)>();
-
-        foreach (var instance in targetInstances)
-        {
-            var latestVersion = await GetLatestVersionForBotType(instance.BotType);
-            if (!string.IsNullOrEmpty(latestVersion) && instance.Version != latestVersion)
-            {
-                instancesNeedingUpdate.Add((instance.ProcessId, instance.Port, instance.Version, instance.BotType));
-                result.UpdatesNeeded++;
-            }
-        }
-
-        if (instancesNeedingUpdate.Count == 0)
-        {
-            LogUtil.LogInfo($"All {botType} instances are already up to date", "UpdateManager");
-            return result;
-        }
-
-        LogUtil.LogInfo($"Idling {botType} bots across {instancesNeedingUpdate.Count} instances before updates...", "UpdateManager");
-
-        // Idle specific instances
-        foreach (var (processId, port, version, instanceBotType) in instancesNeedingUpdate)
-        {
-            if (processId == Environment.ProcessId)
-            {
-                var flpBotsField = mainForm.GetType().GetField("FLP_Bots",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-                if (flpBotsField?.GetValue(mainForm) is FlowLayoutPanel flpBots)
-                {
-                    var controllers = flpBots.Controls.OfType<BotController>().ToList();
-                    foreach (var controller in controllers)
-                    {
-                        var currentState = controller.ReadBotState();
-                        if (currentState != "IDLE" && currentState != "STOPPED")
-                        {
-                            controller.SendCommand(BotControlCommand.Idle, false);
-                        }
-                    }
-                }
-            }
-            else
-            {
-                var idleResponse = BotServer.QueryRemote(port, "IDLEALL");
-                if (idleResponse.StartsWith("ERROR"))
-                {
-                    LogUtil.LogError($"Failed to send idle command to port {port}", "UpdateManager");
-                }
-            }
-        }
-
-        LogUtil.LogInfo($"Waiting for {botType} bots to finish current operations and go idle...", "UpdateManager");
-
-        var allIdle = await WaitForAllInstancesToBeIdle(mainForm, instancesNeedingUpdate, 120); // 2 minutes for specific bot types
-
-        if (!allIdle)
-        {
-            LogUtil.LogInfo($"Timeout reached while waiting for {botType} bots to idle. Proceeding with updates anyway.", "UpdateManager");
-        }
-
-        // Proceed with updates for this specific bot type
-        var sortedInstances = instancesNeedingUpdate
-            .Where(i => i.ProcessId != Environment.ProcessId)
-            .Concat(instancesNeedingUpdate.Where(i => i.ProcessId == Environment.ProcessId))
-            .ToList();
-
-        foreach (var (processId, port, currentVersion, instanceBotType) in sortedInstances)
-        {
-            var latestVersion = await GetLatestVersionForBotType(instanceBotType);
-            var instanceResult = new InstanceUpdateResult
-            {
-                Port = port,
-                ProcessId = processId,
-                CurrentVersion = currentVersion,
-                LatestVersion = latestVersion,
-                NeedsUpdate = true,
-                BotType = instanceBotType.ToString()
-            };
-
-            try
-            {
-                if (processId == Environment.ProcessId)
-                {
-                    // Use automatic update for master instance
-                    _ = Task.Run(async () =>
-                    {
-                        await PerformAutomaticUpdate(instanceBotType.ToString(), latestVersion);
-                    });
-
-                    instanceResult.UpdateStarted = true;
-                    result.UpdatesStarted++;
-                    LogUtil.LogInfo($"Master {botType} instance automatic update triggered", "UpdateManager");
-                }
-                else
-                {
-                    LogUtil.LogInfo($"Triggering update for {botType} instance on port {port}...", "UpdateManager");
-                    var updateResponse = BotServer.QueryRemote(port, "UPDATE");
-                    if (!updateResponse.StartsWith("ERROR"))
-                    {
-                        instanceResult.UpdateStarted = true;
-                        result.UpdatesStarted++;
-                        LogUtil.LogInfo($"Update triggered for {botType} instance on port {port}", "UpdateManager");
-                        await Task.Delay(3000); // 3 seconds delay between updates
-                    }
-                    else
-                    {
-                        instanceResult.Error = "Failed to start update";
-                        result.UpdatesFailed++;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                instanceResult.Error = ex.Message;
-                result.UpdatesFailed++;
-                LogUtil.LogError($"Error updating {botType} instance on port {port}: {ex.Message}", "UpdateManager");
-            }
-
-            result.InstanceResults.Add(instanceResult);
-        }
-
-        return result;
-    }
-
-    private static async Task<dynamic?> CreateUpdateFormForBotType(BotType botType, string latestVersion)
-    {
-        try
-        {
-            return botType switch
-            {
-                BotType.PokeBot => await CreatePokeBotUpdateForm(latestVersion),
-                BotType.RaidBot => new UpdateForm(false, latestVersion, true),
-                _ => null
-            };
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static async Task<dynamic?> CreatePokeBotUpdateForm(string latestVersion)
-    {
-        try
-        {
-            var updateFormType = Type.GetType("SysBot.Pokemon.WinForms.UpdateForm, SysBot.Pokemon.WinForms");
-            if (updateFormType != null)
-            {
-                return Activator.CreateInstance(updateFormType, false, latestVersion, true);
-            }
-            return null;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     private static bool IsPortOpen(int port)
     {
         try
         {
             using var client = new System.Net.Sockets.TcpClient();
             var result = client.BeginConnect("127.0.0.1", port, null, null);
-            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(200)); // Reduziert von 1s auf 200ms
+            var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromSeconds(1));
             if (success)
             {
                 client.EndConnect(result);

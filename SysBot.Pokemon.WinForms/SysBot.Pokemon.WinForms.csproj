@@ -6,7 +6,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <PackageId>SysBot.Pokemon.WinForms</PackageId>
     <Company>Project Pokémon</Company>
-    <Authors>Kaphotics, Gengar, Taku1991</Authors>
+    <Authors>Kaphotics, Gengar</Authors>
 	  <LangVersion>13</LangVersion>
     <Product>SysBot.Pokemon.WinForms</Product>
     <Description>Nintendo Switch Pokémon Bot Manager</Description>
@@ -22,8 +22,6 @@
     <DelaySign>False</DelaySign>
     <AssemblyOriginatorKeyFile>
     </AssemblyOriginatorKeyFile>
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <DebugType>none</DebugType>
@@ -41,7 +39,6 @@
     <ProjectReference Include="..\SysBot.Base\SysBot.Base.csproj" />
     <ProjectReference Include="..\SysBot.Pokemon.Discord\SysBot.Pokemon.Discord.csproj" />
     <ProjectReference Include="..\SysBot.Pokemon\SysBot.Pokemon.csproj" />
-    <!-- <ProjectReference Include="..\SysBot.Web\SysBot.Web.csproj" /> -->
   </ItemGroup>
   <ItemGroup>
     <Reference Include="PKHeX.Core">

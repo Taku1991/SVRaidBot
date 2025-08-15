@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=5.0">
-    <title>Universal Bot Control Center</title>
+    <title>SV RaidBot Control Center</title>
     <style>
         :root {
             --bg-primary: #0a0e27;
@@ -239,145 +239,6 @@
             border-color: var(--danger);
         }
 
-        .btn-raidbot {
-            background: linear-gradient(135deg, #8b5cf6, #a855f7);
-            border-color: #8b5cf6;
-            color: white;
-        }
-
-            .btn-raidbot:hover:not(:disabled) {
-                background: linear-gradient(135deg, #7c3aed, #9333ea);
-        }
-
-        .scheduled-restart-section {
-            background: var(--bg-card);
-            border-radius: var(--border-radius);
-            padding: var(--spacing-lg);
-            margin-bottom: var(--spacing-xl);
-            border: 1px solid var(--border);
-        }
-
-        .scheduled-restart-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: var(--spacing-md);
-        }
-
-            .scheduled-restart-header h2 {
-                font-size: clamp(1rem, 3vw, 1.2rem);
-                color: var(--text-secondary);
-            }
-
-        .restart-schedule-controls {
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-md);
-            flex-wrap: wrap;
-        }
-
-        .schedule-toggle {
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-sm);
-        }
-
-        .toggle-switch {
-            position: relative;
-            width: 48px;
-            height: 24px;
-            cursor: pointer;
-        }
-
-            .toggle-switch input {
-                display: none;
-            }
-
-        .toggle-slider {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: var(--bg-hover);
-            border: 1px solid var(--border);
-            border-radius: 24px;
-            transition: all 0.3s ease;
-        }
-
-            .toggle-slider::before {
-                content: '';
-                position: absolute;
-                width: 16px;
-                height: 16px;
-                left: 4px;
-                bottom: 3px;
-                background: var(--text-secondary);
-                border-radius: 50%;
-                transition: all 0.3s ease;
-            }
-
-        .toggle-switch input:checked + .toggle-slider {
-            background: var(--accent);
-            border-color: var(--accent);
-        }
-
-            .toggle-switch input:checked + .toggle-slider::before {
-                transform: translateX(24px);
-                background: white;
-            }
-
-        .time-input-group {
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-sm);
-        }
-
-        .time-input {
-            background: var(--bg-hover);
-            border: 1px solid var(--border);
-            border-radius: var(--border-radius-sm);
-            padding: var(--spacing-sm) var(--spacing-md);
-            color: var(--text-primary);
-            font-size: 12px;
-            font-family: monospace;
-            width: 100px;
-            transition: all 0.2s ease;
-        }
-
-            .time-input:focus {
-                outline: none;
-                border-color: var(--accent);
-                box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2);
-            }
-
-            .time-input:disabled {
-                opacity: 0.5;
-                cursor: not-allowed;
-            }
-
-        .schedule-status {
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-sm);
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            padding: var(--spacing-sm);
-            background: var(--bg-hover);
-            border-radius: var(--border-radius-sm);
-        }
-
-            .schedule-status.active {
-                color: var(--success);
-                background: rgba(16, 185, 129, 0.1);
-                border: 1px solid rgba(16, 185, 129, 0.3);
-            }
-
-        .next-restart-time {
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
         .instances-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(min(100%, 350px), 1fr));
@@ -407,22 +268,6 @@
                 box-shadow: var(--shadow-hover);
             }
 
-            .instance-card.pokebot {
-                border-left: 4px solid #10b981;
-            }
-
-                .instance-card.pokebot .instance-header {
-                    background: linear-gradient(135deg, var(--bg-secondary), rgba(16, 185, 129, 0.1));
-                }
-
-            .instance-card.raidbot {
-                border: 2px solid #8b5cf6;
-            }
-
-                .instance-card.raidbot .instance-header {
-                    background: linear-gradient(135deg, var(--bg-secondary), rgba(139, 92, 246, 0.1));
-            }
-
         .instance-header {
             background: var(--bg-secondary);
             padding: var(--spacing-md) var(--spacing-lg);
@@ -441,55 +286,6 @@
             gap: var(--spacing-sm);
             min-width: 0;
             flex: 1;
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .instance-name {
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-sm);
-        }
-
-        .instance-location {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            font-weight: 400;
-        }
-
-        .remote-indicator {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 0.65rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .master-indicator {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 0.65rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .bot-type-icon {
-            font-size: 1.2rem;
-            flex-shrink: 0;
-        }
-
-        .bot-type-icon.pokebot {
-            color: #10b981;
-        }
-
-        .bot-type-icon.raidbot {
-            color: #8b5cf6;
         }
 
         .instance-badge {
@@ -501,18 +297,6 @@
             color: var(--text-secondary);
             white-space: nowrap;
             flex-shrink: 0;
-        }
-
-            .instance-badge.pokebot {
-                background: rgba(16, 185, 129, 0.2);
-                color: #10b981;
-                border: 1px solid #10b981;
-            }
-
-            .instance-badge.raidbot {
-                background: rgba(139, 92, 246, 0.2);
-                color: #8b5cf6;
-                border: 1px solid #8b5cf6;
         }
 
         .instance-body {
@@ -1359,7 +1143,7 @@
         <header class="header">
             <div class="header-content">
                 <div class="logo">
-                    <h1>Universal Bot Control Center</h1>
+                    <h1>PokeBot Control Center</h1>
                     <div class="status-indicator"></div>
                 </div>
                 <div class="refresh-status">
@@ -1369,29 +1153,6 @@
             </div>
         </header>
         <main class="main">
-            <div class="scheduled-restart-section">
-                <div class="scheduled-restart-header">
-                    <h2>Scheduled Restart</h2>
-                </div>
-                <div class="restart-schedule-controls">
-                    <div class="schedule-toggle">
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="schedule-restart-toggle" onchange="toggleScheduledRestart()">
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <label for="schedule-restart-toggle">Enable daily restart</label>
-                    </div>
-                    <div class="time-input-group">
-                        <label for="restart-time">Time:</label>
-                        <input type="time" id="restart-time" class="time-input" value="00:00" onchange="updateRestartSchedule()">
-                    </div>
-                    <button class="btn btn-warning" onclick="restartAllInstances()">🔄 Restart Now</button>
-                </div>
-                <div id="schedule-status" class="schedule-status" style="display: none;">
-                    <span>⏰</span>
-                    <span>Next restart scheduled for: <span id="next-restart-time" class="next-restart-time">-</span></span>
-                </div>
-            </div>
             <div class="global-controls">
                 <h2>Global Controls - All Instances</h2>
                 <div class="control-buttons">
@@ -1401,15 +1162,10 @@
                     <button class="btn" onclick="sendGlobalCommand('resume')">⏯️ Resume All</button>
                     <button class="btn" onclick="sendGlobalCommand('restart')">🔄 Restart All</button>
                     <button class="btn" onclick="sendGlobalCommand('reboot')">🔌 Reboot All</button>
+                    <button class="btn btn-primary" onclick="sendGlobalCommand('refreshmap')">🗺️ Refresh Map</button>
                     <button class="btn" onclick="sendGlobalCommand('screenon')">💡 Screen On</button>
                     <button class="btn" onclick="sendGlobalCommand('screenoff')">🌙 Screen Off</button>
-                    <button class="btn btn-raidbot" onclick="sendGlobalCommand('refreshmap')" id="refreshMapBtn" style="display: none;">🗺️ Refresh Map</button>
-                    <button class="btn btn-primary" onclick="updatePokeBotInstances()" id="updatePokeBotBtn">
-                        <img src="update_pokebot.png" style="width: 16px; height: 16px; margin-right: 4px;" alt="Update PokeBot"> Update PokeBot
-                    </button>
-                    <button class="btn btn-primary" onclick="updateRaidBotInstances()" id="updateRaidBotBtn">
-                        <img src="update_raidbot.png" style="width: 16px; height: 16px; margin-right: 4px;" alt="Update RaidBot"> Update RaidBot
-                    </button>
+                    <button class="btn btn-primary" onclick="updateAllInstances()">⬆️ Update All</button>
                 </div>
             </div>
             <div id="instances-container" class="instances-grid">
@@ -2140,41 +1896,16 @@
             const container = document.getElementById('instances-container');
 
             if (instances.length === 0) {
-                container.innerHTML = '<div class="error-message">⚠️ No bot instances found. Make sure at least one PokeBot is running.</div>';
+                container.innerHTML = '<div class="error-message">⚠️ No bot instances found. Make sure at least one SVRaidBot is running.</div>';
                 return;
-            }
-
-            // Check if we have any RaidBots to show the refresh map button
-            const hasRaidBots = instances.some(instance => instance.BotType === 'RaidBot');
-            const refreshMapBtn = document.getElementById('refreshMapBtn');
-            if (refreshMapBtn) {
-                refreshMapBtn.style.display = hasRaidBots ? 'inline-flex' : 'none';
-            }
-
-            // Show/hide update buttons based on available bot types
-            const hasPokeBots = instances.some(instance => instance.BotType === 'PokeBot');
-            const updatePokeBotBtn = document.getElementById('updatePokeBotBtn');
-            const updateRaidBotBtn = document.getElementById('updateRaidBotBtn');
-            
-            if (updatePokeBotBtn) {
-                updatePokeBotBtn.style.display = hasPokeBots ? 'inline-flex' : 'none';
-            }
-            if (updateRaidBotBtn) {
-                updateRaidBotBtn.style.display = hasRaidBots ? 'inline-flex' : 'none';
             }
 
             container.innerHTML = instances.map(instance => {
                 const isOnline = instance.IsOnline || false;
                 const statusClass = isOnline ? 'online' : 'offline';
-                const botType = instance.BotType || 'Unknown';
-                const botTypeClass = botType.toLowerCase();
                 const statusIndicator = isOnline ?
                     '<span class="online-indicator"></span>Connected' :
                     '<span class="offline-indicator"></span>Disconnected';
-
-                // Bot type icon and name
-                const botIcon = getBotTypeIcon(botType);
-                const botTypeName = getBotTypeName(botType);
 
                 let instanceStatus = 'stopped';
                 let instanceStatusText = 'Stopped';
@@ -2182,6 +1913,8 @@
                     const runningCount = instance.BotStatuses.filter(b =>
                         b.Status.toUpperCase().includes('RUNNING') ||
                         b.Status.toUpperCase().includes('ACTIVE') ||
+                        b.Status.toUpperCase().includes('ROTATINGRAIDBOT') ||
+                        b.Status.toUpperCase() === 'ROTATINGRAIDBOT' ||
                         (!b.Status.toUpperCase().includes('IDLE') &&
                             !b.Status.toUpperCase().includes('STOPPED') &&
                             !b.Status.toUpperCase().includes('ERROR'))
@@ -2205,149 +1938,98 @@
                     }
                 }
 
-                // Generate location information
-                const locationInfo = instance.IP && instance.IP !== '127.0.0.1' ? 
-                    `${instance.IP}:${instance.Port}` : 
-                    `localhost:${instance.Port}`;
-                
-                // Generate role indicators
-                const roleIndicators = [];
-                if (instance.IsMaster) {
-                    roleIndicators.push('<span class="master-indicator">Master</span>');
-                }
-                if (instance.IsRemote) {
-                    roleIndicators.push('<span class="remote-indicator">Remote</span>');
-                }
-
                 return `
-                    <div class="instance-card ${statusClass} ${botTypeClass}" data-port="${instance.Port}" data-ip="${instance.IP || '127.0.0.1'}">
-                        <div class="instance-header">
-                            <h3 class="instance-title">
-                                <div class="instance-name">
-                                    <span class="bot-type-icon ${botTypeClass}">${botIcon}</span>
-                                    ${instance.Name}
-                                    ${roleIndicators.join('')}
-                                    <span class="instance-status-badge ${instanceStatus}">${instanceStatusText}</span>
-                                </div>
-                                <div class="instance-location">${locationInfo}</div>
-                            </h3>
-                            <span class="instance-badge ${botTypeClass}">${botTypeName}</span>
-                        </div>
-                        <div class="instance-body">
-                            <div class="instance-info">
-                                <div class="info-item">
-                                    <span class="info-label">Version</span>
-                                    <span class="info-value">${instance.Version}</span>
-                                </div>
-                                <div class="info-item">
-                                    <span class="info-label">Mode</span>
-                                    <span class="info-value">${instance.Mode}</span>
-                                </div>
-                                <div class="info-item">
-                                    <span class="info-label">Process ID</span>
-                                    <span class="info-value">${instance.ProcessId}</span>
-                                </div>
-                                <div class="info-item">
-                                    <span class="info-label">IP Address</span>
-                                    <span class="info-value">${instance.IP || '127.0.0.1'}</span>
-                                </div>
-                                <div class="info-item">
-                                    <span class="info-label">Port</span>
-                                    <span class="info-value">${instance.Port}</span>
-                                </div>
-                                <div class="info-item">
-                                    <span class="info-label">Connection</span>
-                                    <span class="info-value">${statusIndicator}</span>
-                                </div>
-                            </div>
-
-                            ${instance.BotStatuses && instance.BotStatuses.length > 0 ? `
-                            <div class="bot-status">
-                                <div class="info-label" style="margin-bottom: 0.5rem;">BOTS (${instance.BotStatuses.length})</div>
-                                ${instance.BotStatuses.map((bot, index) => `
-                                    <div class="bot-status-item">
-                                        <span class="bot-name">
-                                            <span style="color: ${getStatusColor(bot.Status)};">●</span>
-                                            <span>${bot.Name || `Bot ${index + 1}`}</span>
-                                        </span>
-                                        <span class="bot-state ${getStatusClass(bot.Status)}">${bot.Status}</span>
+                                <div class="instance-card ${statusClass}" data-port="${instance.Port}">
+                                    <div class="instance-header">
+                                        <h3 class="instance-title">
+                                            ${instance.Name}
+                                            <span class="instance-status-badge ${instanceStatus}">${instanceStatusText}</span>
+                                        </h3>
+                                        <span class="instance-badge">Port ${instance.Port}</span>
                                     </div>
-                                `).join('')}
-                            </div>
-                            ` : instance.BotCount > 0 ? `
-                            <div class="bot-status">
-                                <div class="info-label">BOTS</div>
-                                <div class="bot-status-item">
-                                    <span class="bot-name">Bot Count: ${instance.BotCount}</span>
-                                    <span class="bot-state">Status Unknown</span>
-                                </div>
-                            </div>
-                            ` : ''}
+                                    <div class="instance-body">
+                                        <div class="instance-info">
+                                            <div class="info-item">
+                                                <span class="info-label">Version</span>
+                                                <span class="info-value">${instance.Version}</span>
+                                            </div>
+                                            <div class="info-item">
+                                                <span class="info-label">Mode</span>
+                                                <span class="info-value">${instance.Mode}</span>
+                                            </div>
+                                            <div class="info-item">
+                                                <span class="info-label">Process ID</span>
+                                                <span class="info-value">${instance.ProcessId}</span>
+                                            </div>
+                                            <div class="info-item">
+                                                <span class="info-label">Connection</span>
+                                                <span class="info-value">${statusIndicator}</span>
+                                            </div>
+                                        </div>
 
-                            <div class="instance-controls">
-                                <button class="action-menu-button" onclick="toggleActionMenu(event, '${instance.IP}', ${instance.Port})" ${!isOnline ? 'disabled' : ''}>                                    ⚡ Actions <span style="font-size: 0.75rem;">▼</span>
+                                        ${instance.BotStatuses && instance.BotStatuses.length > 0 ? `
+                                        <div class="bot-status">
+                                            <div class="info-label" style="margin-bottom: 0.5rem;">BOTS (${instance.BotStatuses.length})</div>
+                                            ${instance.BotStatuses.map((bot, index) => `
+                                                <div class="bot-status-item">
+                                                    <span class="bot-name">
+                                                        <span style="color: ${getStatusColor(bot.Status)};">●</span>
+                                                        <span>${bot.Name || `Bot ${index + 1}`}</span>
+                                                    </span>
+                                                    <span class="bot-state ${getStatusClass(bot.Status)}">${bot.Status}</span>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                        ` : instance.BotCount > 0 ? `
+                                        <div class="bot-status">
+                                            <div class="info-label">BOTS</div>
+                                            <div class="bot-status-item">
+                                                <span class="bot-name">Bot Count: ${instance.BotCount}</span>
+                                                <span class="bot-state">Status Unknown</span>
+                                            </div>
+                                        </div>
+                                        ` : ''}
+
+                                        <div class="instance-controls">
+                                            <button class="action-menu-button" onclick="toggleActionMenu(event, ${instance.Port})" ${!isOnline ? 'disabled' : ''}>
+                                                ⚡ Actions <span style="font-size: 0.75rem;">▼</span>
+                                            </button>
+                                            <div class="action-menu" id="action-menu-${instance.Port}">
+                                                <button class="action-menu-item success" onclick="sendInstanceCommand(${instance.Port}, 'start')">
+                                                    ▶️ Start
+                                                </button>
+                                                <button class="action-menu-item danger" onclick="sendInstanceCommand(${instance.Port}, 'stop')">
+                                                    ⏹️ Stop
+                                                </button>
+                                                <button class="action-menu-item warning" onclick="sendInstanceCommand(${instance.Port}, 'idle')">
+                                                    ⏸️ Idle
+                                                </button>
+                                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'resume')">
+                                                    ⏯️ Resume
+                                                </button>
+                                                <div class="action-menu-divider"></div>
+                                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'restart')">
+                                                    🔄 Restart
+                                                </button>
+                                                <button class="action-menu-item danger" onclick="sendInstanceCommand(${instance.Port}, 'reboot')">
+                                                    🔌 Reboot
+                                                </button>
+                                                <div class="action-menu-divider"></div>
+                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'refreshmap')">
+                                    🗺️ Refresh Map
                                 </button>
-                                <div class="action-menu" id="action-menu-${instance.IP.replace(/\./g, '-')}-${instance.Port}">
-                                    <button class="action-menu-item success" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'start')">
-                                        ▶️ Start
-                                    </button>
-                                    <button class="action-menu-item danger" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'stop')">
-                                        ⏹️ Stop
-                                    </button>
-                                    <button class="action-menu-item warning" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'idle')">
-                                        ⏸️ Idle
-                                    </button>
-                                    <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'resume')">
-                                        ⏯️ Resume
-                                    </button>
-                                    <div class="action-menu-divider"></div>
-                                    <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'restart')">
-                                        🔄 Restart
-                                    </button>
-                                    <button class="action-menu-item danger" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'reboot')">
-                                        🔌 Reboot
-                                    </button>
-                                    <div class="action-menu-divider"></div>
-                                    <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'screenon')">
-                                        💡 Screen On
-                                    </button>
-                                    <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'screenoff')">
-                                        🌙 Screen Off
-                                    </button>
-                                    ${botType === 'RaidBot' ? `
-                                    <div class="action-menu-divider"></div>
-                                    <button class="action-menu-item" onclick="sendInstanceCommand('${instance.IP}', ${instance.Port}, 'refreshmap')" style="color: #8b5cf6;">
-                                        🗺️ Refresh Map
-                                    </button>
-                                    ` : ''}
+                                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenon')">
+                                                    💡 Screen On
+                                                </button>
+                                                <button class="action-menu-item" onclick="sendInstanceCommand(${instance.Port}, 'screenoff')">
+                                                    🌙 Screen Off
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
+                            `;
             }).join('');
-        }
-
-        function getBotTypeIcon(botType) {
-            switch (botType) {
-                case 'PokeBot':
-                    return '🎮';
-                case 'RaidBot':
-                    return '⚔️';
-                default:
-                    return '🤖';
-            }
-        }
-
-        function getBotTypeName(botType) {
-            switch (botType) {
-                case 'PokeBot':
-                    return 'PokeBot';
-                case 'RaidBot':
-                    return 'RaidBot';
-                default:
-                    return 'Unknown';
-            }
         }
 
         function manualRefresh() {
@@ -2361,14 +2043,14 @@
             showToast('info', 'Refreshed', 'Bot instances refreshed');
         }
 
-        function toggleActionMenu(event, ip, port) {            event.stopPropagation();
-            const menuId = `action-menu-${ip.replace(/\./g, '-')}-${port}`;
-            const menu = document.getElementById(menuId);
+        function toggleActionMenu(event, port) {
+            event.stopPropagation();
+            const menu = document.getElementById(`action-menu-${port}`);
             const allMenus = document.querySelectorAll('.action-menu');
 
             // Close all other menus
             allMenus.forEach(m => {
-                if (m.id !== menuId) {
+                if (m.id !== `action-menu-${port}`) {
                     m.classList.remove('show');
                 }
             });
@@ -2389,6 +2071,7 @@
         function getStatusColor(status) {
             const upperStatus = status?.toUpperCase() || '';
             if (upperStatus.includes('RUNNING') || upperStatus.includes('ACTIVE') || upperStatus === 'ONLINE' ||
+                upperStatus.includes('ROTATINGRAIDBOT') || upperStatus === 'ROTATINGRAIDBOT' ||
                 (!upperStatus.includes('IDLE') && !upperStatus.includes('STOPPED') && !upperStatus.includes('ERROR') && !upperStatus.includes('UNKNOWN'))) {
                 return '#10b981';
             } else if (upperStatus.includes('IDLE') || upperStatus.includes('PAUSED')) {
@@ -2405,6 +2088,7 @@
         function getStatusClass(status) {
             const upperStatus = status?.toUpperCase() || '';
             if (upperStatus.includes('RUNNING') || upperStatus.includes('ACTIVE') ||
+                upperStatus.includes('ROTATINGRAIDBOT') || upperStatus === 'ROTATINGRAIDBOT' ||
                 (!upperStatus.includes('IDLE') && !upperStatus.includes('STOPPED') && !upperStatus.includes('ERROR') && !upperStatus.includes('UNKNOWN'))) {
                 return 'running';
             } else if (upperStatus.includes('IDLE')) {
@@ -2447,17 +2131,17 @@
             }
         }
 
-        async function sendInstanceCommand(ip, port, command) {
+        async function sendInstanceCommand(port, command) {
             // Close action menu
-            const menuId = `action-menu-${ip.replace(/\./g, '-')}-${port}`;
-            document.getElementById(menuId).classList.remove('show');
+            document.getElementById(`action-menu-${port}`).classList.remove('show');
+
             // Clear interaction state
             isInteracting = false;
 
-            showToast('info', 'Sending Command', `Sending ${command} to instance on ${ip}:${port}...`);
+            showToast('info', 'Sending Command', `Sending ${command} to instance on port ${port}...`);
 
             try {
-                const response = await fetch(`${API_BASE}/instances/${ip}:${port}/command`, {
+                const response = await fetch(`${API_BASE}/instances/${port}/command`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ Command: command })
@@ -2467,15 +2151,15 @@
 
                 const result = await response.json();
                 if (result.Success) {
-                    showToast('success', 'Command Sent', `Successfully sent ${command} to instance ${ip}:${port}`);
+                    showToast('success', 'Command Sent', `Successfully sent ${command} to instance on port ${port}`);
                 } else {
                     showToast('error', 'Command Failed', result.Message || 'Unknown error');
                 }
 
                 setTimeout(() => refreshInstances(true), 1000);
             } catch (error) {
-                console.error(`Error sending command to ${ip}:${port}:`, error);
-                showToast('error', 'Error', `Failed to send command to instance ${ip}:${port}`);
+                console.error(`Error sending command to port ${port}:`, error);
+                showToast('error', 'Error', `Failed to send command to instance on port ${port}`);
             }
         }
 
@@ -2556,116 +2240,6 @@
                     });
                 }, 300);
             }, 4000);
-        }
-
-        // Scheduled Restart Functions
-        function toggleScheduledRestart() {
-            const toggle = document.getElementById('schedule-restart-toggle');
-            const timeInput = document.getElementById('restart-time');
-            const statusDiv = document.getElementById('schedule-status');
-            
-            timeInput.disabled = !toggle.checked;
-            
-            if (toggle.checked) {
-                updateRestartSchedule();
-            } else {
-                statusDiv.style.display = 'none';
-            }
-        }
-
-        function updateRestartSchedule() {
-            const toggle = document.getElementById('schedule-restart-toggle');
-            const timeInput = document.getElementById('restart-time');
-            const statusDiv = document.getElementById('schedule-status');
-            const nextTimeSpan = document.getElementById('next-restart-time');
-            
-            if (!toggle.checked) return;
-            
-            const [hours, minutes] = timeInput.value.split(':');
-            const now = new Date();
-            const scheduledTime = new Date();
-            scheduledTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-            
-            // If the time has passed today, schedule for tomorrow
-            if (scheduledTime <= now) {
-                scheduledTime.setDate(scheduledTime.getDate() + 1);
-            }
-            
-            nextTimeSpan.textContent = scheduledTime.toLocaleString();
-            statusDiv.style.display = 'flex';
-            statusDiv.classList.add('active');
-        }
-
-        function restartAllInstances() {
-            if (confirm('Are you sure you want to restart all instances? This will stop all running bots temporarily.')) {
-                sendGlobalCommand('restart');
-            }
-        }
-
-        async function updatePokeBotInstances() {
-            await updateSpecificBotType('PokeBot');
-        }
-
-        async function updateRaidBotInstances() {
-            await updateSpecificBotType('RaidBot');
-        }
-
-        async function updateSpecificBotType(botType) {
-            showModal('progress-modal');
-            document.getElementById('progress-modal-title').textContent = `${botType} Update in Progress`;
-
-            updateState.type = 'update';
-            updateState.startTime = Date.now();
-            updateProgress(`Initializing ${botType} update process...`, `Starting background ${botType} update process`, 10);
-
-            try {
-                const endpoint = botType === 'PokeBot' ? 'pokebot' : 'raidbot';
-                const response = await fetch(`${API_BASE}/update/${endpoint}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-
-                if (!response.ok) throw new Error(`Failed to start ${botType} update`);
-
-                const result = await response.json();
-
-                if (result.Success) {
-                    updateProgress(
-                        `${botType} update started`,
-                        result.Message || `${botType} update process initiated`,
-                        50
-                    );
-                    addLogEntry(`${botType} update process initiated`, 'info');
-
-                    // Show results
-                    setTimeout(() => {
-                        updateProgress(
-                            `${botType} updates initiated`,
-                            `${result.UpdatesStarted || 0} ${botType} instances are now updating`,
-                            100
-                        );
-
-                        setTimeout(() => {
-                            closeModal('progress-modal');
-                            showToast('success', `${botType} Update Started`, 
-                                `Updates initiated for ${result.UpdatesStarted || 0} ${botType} instances`);
-                            refreshInstances(true);
-                        }, 2000);
-                    }, 1000);
-                } else {
-                    throw new Error(result.Message || `${botType} update failed`);
-                }
-
-            } catch (error) {
-                console.error(`Error starting ${botType} update:`, error);
-                updateProgress(`${botType} update failed`, error.message, 0);
-                addLogEntry(`Failed to start ${botType} update: ${error.message}`, 'error');
-
-                setTimeout(() => {
-                    closeModal('progress-modal');
-                    showToast('error', 'Error', `Failed to start ${botType} update process`);
-                }, 2000);
-            }
         }
     </script>
 </body>

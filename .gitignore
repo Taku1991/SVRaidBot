@@ -3,9 +3,6 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
-# Personal workflow documentation (local only)
-WORKFLOW.md
-
 # User-specific files
 *.rsuser
 *.suo
@@ -356,32 +353,8 @@ MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
-
-# PokeBot/RaidBot Specific - Sensitive Configuration Files
-# These files may contain IP addresses, credentials, or private network information
-config.json.backup
-config.*.json
-tailscale.json
-.env
-.env.local
-.env.production
-*.env
-restart_schedule.json
-PokeBot_*.port
-SVRaidBot_*.port
-
-# Tailscale and Network Configuration
-# Prevent accidental commit of network topology or IP addresses
-tailscale_nodes.json
-network_config.json
-remote_nodes.txt
-ip_mapping.json
-
-# Runtime files
-*.pid
-*.lock
-update_status.json
-bot_status.json
-
 SysBot.Pokemon/SV/BotEncounter/EncounterBotSettings.cs
 SysBot.Pokemon/SV/BotEncounter/EncounterBotReset.cs
+
+#docs
+/docs/
