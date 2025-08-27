@@ -899,8 +899,10 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
                 //     .Where(p => p.Id != Environment.ProcessId);
 
                 // Scan for RaidBot processes
-                var raidBotProcesses = Process.GetProcessesByName("SysBot")
+                var raidBotProcesses = Process.GetProcessesByName("SVRaidBot")
                     .Where(p => p.Id != Environment.ProcessId);
+
+                LogUtil.LogInfo($"Found {raidBotProcesses.Count()} local SVRaidBot processes to scan", "WebServer");
 
                 foreach (var process in raidBotProcesses)
                 {
@@ -909,7 +911,7 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
                         var instance = TryCreateInstanceFromProcess(process, "RaidBot");
                         if (instance != null)
                         {
-                            // Only add instances on port 9091 or higher
+                            // Only add instances on port 9091 or higher (local SVRaidBots)
                             if (instance.Port >= 9091)
                             {
                                 instances.Add(instance);
@@ -918,9 +920,13 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
                                 // Only log new instances
                                 if (!_knownInstances.Contains(instance.Port))
                                 {
-                                    LogUtil.LogInfo($"Found new RaidBot instance on port {instance.Port}: {instance.BotType}", "WebServer");
+                                    LogUtil.LogInfo($"Found new local RaidBot instance on port {instance.Port}: {instance.BotType}", "WebServer");
                                     _knownInstances.Add(instance.Port);
                                 }
+                            }
+                            else
+                            {
+                                LogUtil.LogInfo($"Ignoring local RaidBot on old port {instance.Port} (< 9091)", "WebServer");
                             }
                         }
                     }
