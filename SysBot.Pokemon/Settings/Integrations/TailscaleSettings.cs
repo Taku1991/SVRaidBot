@@ -19,10 +19,10 @@ public sealed class TailscaleSettings
     public List<string> RemoteNodes { get; set; } = new();
 
     [Category(NodeManagement), Description("Starting port for scanning remote bot instances.")]
-    public int PortScanStart { get; set; } = 8081;
+    public int PortScanStart { get; set; } = 9091;
 
     [Category(NodeManagement), Description("Ending port for scanning remote bot instances.")]
-    public int PortScanEnd { get; set; } = 8110;
+    public int PortScanEnd { get; set; } = 9120;
 
     [Category(NodeManagement), Description("This node acts as the master dashboard aggregating all remote nodes.")]
     public bool IsMasterNode { get; set; } = false;
@@ -50,7 +50,7 @@ public sealed class TailscalePortAllocation
     public Dictionary<string, TailscalePortRange> NodeAllocations { get; set; } = new();
 
     [Description("Default port range for nodes not explicitly configured.")]
-    public TailscalePortRange DefaultRange { get; set; } = new() { Start = 8101, End = 8110 };
+    public TailscalePortRange DefaultRange { get; set; } = new() { Start = 9101, End = 9110 };
 }
 
 /// <summary>
@@ -59,10 +59,10 @@ public sealed class TailscalePortAllocation
 public sealed class TailscalePortRange
 {
     [Description("Starting port number for this node.")]
-    public int Start { get; set; } = 8081;
+    public int Start { get; set; } = 9091;
 
     [Description("Ending port number for this node.")]
-    public int End { get; set; } = 8090;
+    public int End { get; set; } = 9100;
 
     public bool ContainsPort(int port) => port >= Start && port <= End;
     public IEnumerable<int> GetPortRange() => Enumerable.Range(Start, End - Start + 1);
