@@ -21,7 +21,7 @@ public static class WebApiExtensions
     private static CancellationTokenSource? _monitorCts;
     private static Main? _main;
 
-    private const int WebPort = 8080;
+    private const int WebPort = 9090;
     private static int _tcpPort = 0;
 
     public static void InitWebServer(this Main mainForm)
@@ -33,7 +33,7 @@ public static class WebApiExtensions
             if (IsPortInUse(WebPort))
             {
                 LogUtil.LogInfo($"Web port {WebPort} is in use by another bot instance. Starting as slave...", "WebServer");
-                _tcpPort = FindAvailablePort(8081);
+                _tcpPort = FindAvailablePort(9091);
                 StartTcpOnly();
                 LogUtil.LogInfo($"Slave instance started with TCP port {_tcpPort}. Monitoring master...", "WebServer");
 
@@ -45,7 +45,7 @@ public static class WebApiExtensions
             // Try to add URL reservation for network access
             TryAddUrlReservation(WebPort);
 
-            _tcpPort = FindAvailablePort(8081);
+            _tcpPort = FindAvailablePort(9091);
             LogUtil.LogInfo($"Starting as master web server on port {WebPort} with TCP port {_tcpPort}", "WebServer");
             StartFullServer();
             LogUtil.LogInfo($"Web interface is available at http://localhost:{WebPort}", "WebServer");
@@ -614,7 +614,7 @@ public static class WebApiExtensions
         }
     }
 
-    public static void StartWebServer(this Main mainForm, int port = 8080, int tcpPort = 8081)
+    public static void StartWebServer(this Main mainForm, int port = 9090, int tcpPort = 9091)
     {
         try
         {

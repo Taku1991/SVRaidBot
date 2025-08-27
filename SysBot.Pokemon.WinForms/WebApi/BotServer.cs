@@ -15,7 +15,7 @@ using SysBot.Base;
 
 namespace SysBot.Pokemon.WinForms.WebApi;
 
-public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDisposable
+public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDisposable
 {
     private HttpListener? _listener;
     private Thread? _listenerThread;
@@ -1520,7 +1520,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         }
 
         // Default fallback
-        return (8081, 8110);
+        return (9091, 9120);
     }
 
     private string? GetLocalTailscaleIP()
