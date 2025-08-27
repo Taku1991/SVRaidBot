@@ -894,33 +894,9 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
             // Local process discovery (only if enabled)
             if (scanLocalhost)
             {
-                // Scan for PokeBot processes
-                var pokeBotProcesses = Process.GetProcessesByName("PokeBot")
-                    .Where(p => p.Id != Environment.ProcessId);
-
-                foreach (var process in pokeBotProcesses)
-                {
-                    try
-                    {
-                        var instance = TryCreateInstanceFromProcess(process, "PokeBot");
-                        if (instance != null)
-                        {
-                            instances.Add(instance);
-                            currentInstances.Add(instance.Port);
-                            
-                            // Only log new instances
-                            if (!_knownInstances.Contains(instance.Port))
-                            {
-                                LogUtil.LogInfo($"Found new PokeBot instance on port {instance.Port}: {instance.BotType}", "WebServer");
-                                _knownInstances.Add(instance.Port);
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        // Ignore process scan errors
-                    }
-                }
+                // Skip PokeBot process discovery - only scan RaidBots on port range 9091+
+                // var pokeBotProcesses = Process.GetProcessesByName("PokeBot")
+                //     .Where(p => p.Id != Environment.ProcessId);
 
                 // Scan for RaidBot processes
                 var raidBotProcesses = Process.GetProcessesByName("SysBot")
@@ -933,14 +909,18 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
                         var instance = TryCreateInstanceFromProcess(process, "RaidBot");
                         if (instance != null)
                         {
-                            instances.Add(instance);
-                            currentInstances.Add(instance.Port);
-                            
-                            // Only log new instances
-                            if (!_knownInstances.Contains(instance.Port))
+                            // Only add instances on port 9091 or higher
+                            if (instance.Port >= 9091)
                             {
-                                LogUtil.LogInfo($"Found new RaidBot instance on port {instance.Port}: {instance.BotType}", "WebServer");
-                                _knownInstances.Add(instance.Port);
+                                instances.Add(instance);
+                                currentInstances.Add(instance.Port);
+                                
+                                // Only log new instances
+                                if (!_knownInstances.Contains(instance.Port))
+                                {
+                                    LogUtil.LogInfo($"Found new RaidBot instance on port {instance.Port}: {instance.BotType}", "WebServer");
+                                    _knownInstances.Add(instance.Port);
+                                }
                             }
                         }
                     }
