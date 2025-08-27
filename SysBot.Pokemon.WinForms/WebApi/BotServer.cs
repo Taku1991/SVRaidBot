@@ -951,9 +951,10 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
                 }
             }
 
-            // Always scan localhost ports for direct connections
+            // Always scan localhost ports for direct connections (only RaidBot range 9091+)
             var portRange = GetLocalPortRange(tailscaleConfig);
-            for (int port = portRange.start; port <= portRange.end; port++)
+            var scanStart = Math.Max(portRange.start, 9091); // Only scan ports 9091 and above
+            for (int port = scanStart; port <= portRange.end; port++)
             {
                 if (port == _tcpPort) continue; // Skip our own port
                 if (currentInstances.Contains(port)) continue; // Skip already found instances
@@ -963,18 +964,14 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
                     var instance = TryCreateInstanceFromPortAndIP("127.0.0.1", port);
                     if (instance != null)
                     {
-                        // Only add RaidBot instances in the new port range
-                        if (instance.BotType == "RaidBot" && port >= 9091)
+                        instances.Add(instance);
+                        currentInstances.Add(port);
+                        
+                        // Only log new instances
+                        if (!_knownInstances.Contains(port))
                         {
-                            instances.Add(instance);
-                            currentInstances.Add(port);
-                            
-                            // Only log new instances
-                            if (!_knownInstances.Contains(port))
-                            {
-                                LogUtil.LogInfo($"Found new RaidBot instance on port {port}: {instance.BotType}", "WebServer");
-                                _knownInstances.Add(port);
-                            }
+                            LogUtil.LogInfo($"Found new bot instance on port {port}: {instance.BotType}", "WebServer");
+                            _knownInstances.Add(port);
                         }
                     }
                 }
@@ -1476,22 +1473,19 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
         var instances = new List<BotInstance>();
         var portRange = GetPortRangeForNode(remoteIP, tailscaleConfig);
 
-        LogUtil.LogInfo($"Scanning {remoteIP} ports {portRange.start}-{portRange.end}", "WebServer");
+        var scanStart = Math.Max(portRange.start, 9091); // Only scan ports 9091 and above
+        LogUtil.LogInfo($"Scanning {remoteIP} ports {scanStart}-{portRange.end}", "WebServer");
 
-        for (int port = portRange.start; port <= portRange.end; port++)
+        for (int port = scanStart; port <= portRange.end; port++)
         {
             try
             {
                 var instance = TryCreateInstanceFromPortAndIP(remoteIP, port);
                 if (instance != null)
                 {
-                    // Only add RaidBot instances in the new port range
-                    if (instance.BotType == "RaidBot" && port >= 9091)
-                    {
-                        instance.IsRemote = true;
-                        instance.IP = remoteIP;
-                        instances.Add(instance);
-                    }
+                    instance.IsRemote = true;
+                    instance.IP = remoteIP;
+                    instances.Add(instance);
                 }
             }
             catch
