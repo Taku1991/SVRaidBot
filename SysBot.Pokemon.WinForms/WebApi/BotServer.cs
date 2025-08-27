@@ -963,14 +963,18 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
                     var instance = TryCreateInstanceFromPortAndIP("127.0.0.1", port);
                     if (instance != null)
                     {
-                        instances.Add(instance);
-                        currentInstances.Add(port);
-                        
-                        // Only log new instances
-                        if (!_knownInstances.Contains(port))
+                        // Only add RaidBot instances in the new port range
+                        if (instance.BotType == "RaidBot" && port >= 9091)
                         {
-                            LogUtil.LogInfo($"Found new bot instance on port {port}: {instance.BotType}", "WebServer");
-                            _knownInstances.Add(port);
+                            instances.Add(instance);
+                            currentInstances.Add(port);
+                            
+                            // Only log new instances
+                            if (!_knownInstances.Contains(port))
+                            {
+                                LogUtil.LogInfo($"Found new RaidBot instance on port {port}: {instance.BotType}", "WebServer");
+                                _knownInstances.Add(port);
+                            }
                         }
                     }
                 }
@@ -1481,9 +1485,13 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
                 var instance = TryCreateInstanceFromPortAndIP(remoteIP, port);
                 if (instance != null)
                 {
-                    instance.IsRemote = true;
-                    instance.IP = remoteIP;
-                    instances.Add(instance);
+                    // Only add RaidBot instances in the new port range
+                    if (instance.BotType == "RaidBot" && port >= 9091)
+                    {
+                        instance.IsRemote = true;
+                        instance.IP = remoteIP;
+                        instances.Add(instance);
+                    }
                 }
             }
             catch
