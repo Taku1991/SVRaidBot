@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, maximum-scale=5.0">
-    <title>Universal Bot Control Center</title>
+    <title>Raid Bot Control Center</title>
     <style>
         :root {
             --bg-primary: #0a0e27;
@@ -1359,7 +1359,7 @@
         <header class="header">
             <div class="header-content">
                 <div class="logo">
-                    <h1>Universal Bot Control Center</h1>
+                    <h1>Raid Bot Control Center</h1>
                     <div class="status-indicator"></div>
                 </div>
                 <div class="refresh-status">
@@ -1405,10 +1405,10 @@
                     <button class="btn" onclick="sendGlobalCommand('screenoff')">🌙 Screen Off</button>
                     <button class="btn btn-raidbot" onclick="sendGlobalCommand('refreshmap')" id="refreshMapBtn" style="display: none;">🗺️ Refresh Map</button>
                     <button class="btn btn-primary" onclick="updatePokeBotInstances()" id="updatePokeBotBtn">
-                        <img src="update_pokebot.png" style="width: 16px; height: 16px; margin-right: 4px;" alt="Update PokeBot"> Update PokeBot
+                        ⬆️ Update PokeBot
                     </button>
                     <button class="btn btn-primary" onclick="updateRaidBotInstances()" id="updateRaidBotBtn">
-                        <img src="update_raidbot.png" style="width: 16px; height: 16px; margin-right: 4px;" alt="Update RaidBot"> Update RaidBot
+                        ⬆️ Update RaidBot
                     </button>
                 </div>
             </div>
@@ -1872,7 +1872,7 @@
                     }
 
                     // Check for master update
-                    const masterPort = parseInt(window.location.port || '8080');
+                    const masterPort = parseInt(window.location.port || '9090');
                     const masterUpdating = result.Results?.some(r =>
                         r.UpdateStarted && r.Port === masterPort
                     );

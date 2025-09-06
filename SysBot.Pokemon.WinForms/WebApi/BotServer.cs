@@ -15,7 +15,7 @@ using SysBot.Base;
 
 namespace SysBot.Pokemon.WinForms.WebApi;
 
-public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDisposable
+public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDisposable
 {
     private HttpListener? _listener;
     private Thread? _listenerThread;
@@ -894,37 +894,15 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
             // Local process discovery (only if enabled)
             if (scanLocalhost)
             {
-                // Scan for PokeBot processes
-                var pokeBotProcesses = Process.GetProcessesByName("PokeBot")
-                    .Where(p => p.Id != Environment.ProcessId);
-
-                foreach (var process in pokeBotProcesses)
-                {
-                    try
-                    {
-                        var instance = TryCreateInstanceFromProcess(process, "PokeBot");
-                        if (instance != null)
-                        {
-                            instances.Add(instance);
-                            currentInstances.Add(instance.Port);
-                            
-                            // Only log new instances
-                            if (!_knownInstances.Contains(instance.Port))
-                            {
-                                LogUtil.LogInfo($"Found new PokeBot instance on port {instance.Port}: {instance.BotType}", "WebServer");
-                                _knownInstances.Add(instance.Port);
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        // Ignore process scan errors
-                    }
-                }
+                // Skip PokeBot process discovery - only scan RaidBots on port range 9091+
+                // var pokeBotProcesses = Process.GetProcessesByName("PokeBot")
+                //     .Where(p => p.Id != Environment.ProcessId);
 
                 // Scan for RaidBot processes
-                var raidBotProcesses = Process.GetProcessesByName("SysBot")
+                var raidBotProcesses = Process.GetProcessesByName("SVRaidBot")
                     .Where(p => p.Id != Environment.ProcessId);
+
+                LogUtil.LogInfo($"Found {raidBotProcesses.Count()} local SVRaidBot processes to scan", "WebServer");
 
                 foreach (var process in raidBotProcesses)
                 {
@@ -933,14 +911,22 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                         var instance = TryCreateInstanceFromProcess(process, "RaidBot");
                         if (instance != null)
                         {
-                            instances.Add(instance);
-                            currentInstances.Add(instance.Port);
-                            
-                            // Only log new instances
-                            if (!_knownInstances.Contains(instance.Port))
+                            // Only add instances on port 9091 or higher (local SVRaidBots)
+                            if (instance.Port >= 9091)
                             {
-                                LogUtil.LogInfo($"Found new RaidBot instance on port {instance.Port}: {instance.BotType}", "WebServer");
-                                _knownInstances.Add(instance.Port);
+                                instances.Add(instance);
+                                currentInstances.Add(instance.Port);
+                                
+                                // Only log new instances
+                                if (!_knownInstances.Contains(instance.Port))
+                                {
+                                    LogUtil.LogInfo($"Found new local RaidBot instance on port {instance.Port}: {instance.BotType}", "WebServer");
+                                    _knownInstances.Add(instance.Port);
+                                }
+                            }
+                            else
+                            {
+                                LogUtil.LogInfo($"Ignoring local RaidBot on old port {instance.Port} (< 9091)", "WebServer");
                             }
                         }
                     }
@@ -951,9 +937,10 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
                 }
             }
 
-            // Always scan localhost ports for direct connections
+            // Always scan localhost ports for direct connections (only RaidBot range 9091+)
             var portRange = GetLocalPortRange(tailscaleConfig);
-            for (int port = portRange.start; port <= portRange.end; port++)
+            var scanStart = Math.Max(portRange.start, 9091); // Only scan ports 9091 and above
+            for (int port = scanStart; port <= portRange.end; port++)
             {
                 if (port == _tcpPort) continue; // Skip our own port
                 if (currentInstances.Contains(port)) continue; // Skip already found instances
@@ -1472,9 +1459,10 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         var instances = new List<BotInstance>();
         var portRange = GetPortRangeForNode(remoteIP, tailscaleConfig);
 
-        LogUtil.LogInfo($"Scanning {remoteIP} ports {portRange.start}-{portRange.end}", "WebServer");
+        var scanStart = Math.Max(portRange.start, 9091); // Only scan ports 9091 and above
+        LogUtil.LogInfo($"Scanning {remoteIP} ports {scanStart}-{portRange.end}", "WebServer");
 
-        for (int port = portRange.start; port <= portRange.end; port++)
+        for (int port = scanStart; port <= portRange.end; port++)
         {
             try
             {
@@ -1520,7 +1508,7 @@ public class BotServer(Main mainForm, int port = 8080, int tcpPort = 8081) : IDi
         }
 
         // Default fallback
-        return (8081, 8110);
+        return (9091, 9120);
     }
 
     private string? GetLocalTailscaleIP()
