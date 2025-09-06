@@ -850,6 +850,8 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
     }
 
     private static HashSet<int> _knownInstances = new HashSet<int>();
+    private static Dictionary<string, DateTime> _lastScanLog = new Dictionary<string, DateTime>();
+    private static int _lastProcessCount = -1;
     
     private List<BotInstance> ScanRemoteInstances()
     {
@@ -902,7 +904,18 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
                 var raidBotProcesses = Process.GetProcessesByName("SVRaidBot")
                     .Where(p => p.Id != Environment.ProcessId);
 
-                LogUtil.LogInfo($"Found {raidBotProcesses.Count()} local SVRaidBot processes to scan", "WebServer");
+                var processCount = raidBotProcesses.Count();
+                var currentTime = DateTime.Now;
+                
+                // Only log if process count changed or if we haven't logged in 5 minutes
+                if (processCount != _lastProcessCount || 
+                    !_lastScanLog.ContainsKey("last_process_scan") ||
+                    currentTime - _lastScanLog["last_process_scan"] > TimeSpan.FromMinutes(5))
+                {
+                    LogUtil.LogInfo($"Found {processCount} local SVRaidBot processes to scan", "WebServer");
+                    _lastScanLog["last_process_scan"] = currentTime;
+                    _lastProcessCount = processCount;
+                }
 
                 foreach (var process in raidBotProcesses)
                 {
@@ -1460,7 +1473,16 @@ public class BotServer(Main mainForm, int port = 9090, int tcpPort = 9091) : IDi
         var portRange = GetPortRangeForNode(remoteIP, tailscaleConfig);
 
         var scanStart = Math.Max(portRange.start, 9091); // Only scan ports 9091 and above
-        LogUtil.LogInfo($"Scanning {remoteIP} ports {scanStart}-{portRange.end}", "WebServer");
+        
+        var scanLogKey = $"remote_scan_{remoteIP}_{scanStart}_{portRange.end}";
+        var currentTime = DateTime.Now;
+        
+        if (!_lastScanLog.ContainsKey(scanLogKey) || 
+            currentTime - _lastScanLog[scanLogKey] > TimeSpan.FromMinutes(5))
+        {
+            LogUtil.LogInfo($"Scanning {remoteIP} ports {scanStart}-{portRange.end}", "WebServer");
+            _lastScanLog[scanLogKey] = currentTime;
+        }
 
         for (int port = scanStart; port <= portRange.end; port++)
         {
