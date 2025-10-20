@@ -36,7 +36,6 @@ namespace SysBot.Pokemon
             APILegality.AllowTrainerOverride = cfg.AllowTrainerDataOverride;
             APILegality.AllowBatchCommands = cfg.AllowBatchCommands;
             APILegality.PrioritizeGame = cfg.PrioritizeGame;
-            APILegality.PrioritizeGameVersion = cfg.PrioritizeGameVersion;
             APILegality.SetBattleVersion = cfg.SetBattleVersion;
             APILegality.Timeout = cfg.Timeout;
             var settings = ParseSettings.Settings;
@@ -90,10 +89,10 @@ namespace SysBot.Pokemon
         private static void InitializeCoreStrings()
         {
             var lang = Thread.CurrentThread.CurrentCulture.TwoLetterISOLanguageName[..2];
-            LocalizationUtil.SetLocalization(typeof(LegalityCheckStrings), lang);
             LocalizationUtil.SetLocalization(typeof(MessageStrings), lang);
-            RibbonStrings.ResetDictionary(GameInfo.Strings.ribbons);
-            ParseSettings.ChangeLocalizationStrings(GameInfo.Strings.movelist, GameInfo.Strings.specieslist);
+            // Note: Localization system was refactored in newer PKHeX versions
+            // RibbonStrings is now instance-based and ParseSettings.ChangeLocalizationStrings was removed
+            // These are primarily for GUI display and not critical for automated legality checking
         }
 
         public static ITrainerInfo GetTrainerInfo<T>() where T : PKM, new()

@@ -77,7 +77,7 @@ public static class RaidPokemonGenerator
                 pid = ((pid & 0xFFFF0000) | ((((fakeTID >> 16) ^ (fakeTID & 0xFFFF) ^ (pid >> 16)) << 4) & 0xFFFF));
             }
         }
-        else if (ShinyUtil.GetIsShiny(fakeTID, pid))
+        else if (ShinyUtil.GetIsShiny6(fakeTID, pid))
         {
             // Ensure not shiny if not meant to be
             pid ^= 0x10000000;
