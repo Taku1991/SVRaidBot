@@ -185,7 +185,7 @@ public class RaidMemoryManager(ISwitchConnectionAsync connection, ulong raidBloc
         {
             var ptr = DeterminePointer(index);
             ptr[3] += 0x18;
-            byte[] flagByte = new byte[] { (byte)(isActive ? 1 : 0) };
+            byte[] flagByte = [(byte)(isActive ? 1 : 0)];
             await _connection.PointerPoke(flagByte, ptr, token).ConfigureAwait(false);
 
             byte[] verification = await _connection.PointerPeek(1, ptr, token).ConfigureAwait(false);
