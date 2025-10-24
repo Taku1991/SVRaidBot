@@ -102,9 +102,16 @@ namespace SysBot.Pokemon.SV.BotRaid
         private bool _isRecoveringFromReboot;
         private volatile bool _isPaused = false;
 
+        private int _consecutiveDenFailures = 0;
+        private int _lastFailedDenIndex = -1;
+
         // Constants for teleport retry logic
         private const int MaxTeleportRetries = 3;
         private const float TeleportDistanceThreshold = 2.5f;
+
+        // Constants for den recovery logic
+        private const int DenFailuresBeforeForceActivate = 1;
+        private const int DenFailuresBeforeMapRefresh = 3;
 
         // Constants for raid type identification
         private const string MysteryRaidTitle = "Mystery Shiny Raid";
@@ -647,10 +654,34 @@ namespace SysBot.Pokemon.SV.BotRaid
                                 {
                                     string msg = $"Failed to create a lobby {_lobbyError} times";
                                     Log(msg);
-                                    await CloseGame(_hub.Config, token).ConfigureAwait(false);
-                                    await StartGameRaid(_hub.Config, token).ConfigureAwait(false);
-                                    _lobbyError = 0;
-                                    continue;
+
+                                    if (_consecutiveDenFailures >= DenFailuresBeforeMapRefresh)
+                                    {
+                                        Log($"Den at index {_seedIndexToReplace} has failed {_consecutiveDenFailures} times. Triggering map refresh.");
+                                        _shouldRefreshMap = true;
+                                        _consecutiveDenFailures = 0;
+                                        _lastFailedDenIndex = -1;
+                                        _lobbyError = 0;
+                                        await CloseGame(_hub.Config, token).ConfigureAwait(false);
+                                        await StartGameRaid(_hub.Config, token).ConfigureAwait(false);
+                                        continue;
+                                    }
+                                    else if (_consecutiveDenFailures >= DenFailuresBeforeForceActivate)
+                                    {
+                                        Log($"Attempting den force-activation recovery (consecutive failures: {_consecutiveDenFailures})");
+                                        await TryForceActivateDen(_seedIndexToReplace, token);
+                                        await CloseGame(_hub.Config, token).ConfigureAwait(false);
+                                        await StartGameRaid(_hub.Config, token).ConfigureAwait(false);
+                                        _lobbyError = 0;
+                                        continue;
+                                    }
+                                    else
+                                    {
+                                        await CloseGame(_hub.Config, token).ConfigureAwait(false);
+                                        await StartGameRaid(_hub.Config, token).ConfigureAwait(false);
+                                        _lobbyError = 0;
+                                        continue;
+                                    }
                                 }
                             }
                         }
@@ -720,6 +751,9 @@ namespace SysBot.Pokemon.SV.BotRaid
                         {
                             continue;
                         }
+
+                        _consecutiveDenFailures = 0;
+                        _lastFailedDenIndex = -1;
 
                         Ensure_currentRaidIndexInBounds();
                         if (_settings.ActiveRaids[_currentRaidIndex].AddedByRACommand)
@@ -1600,6 +1634,79 @@ namespace SysBot.Pokemon.SV.BotRaid
             catch (Exception ex)
             {
                 Log($"Error during teleportation: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Attempts to force activate a den using memory write and IsActive flag
+        /// </summary>
+        private async Task TryForceActivateDen(int index, CancellationToken token)
+        {
+            try
+            {
+                Log($"Attempting to force activate den at index {index}...");
+
+                if (index == -1)
+                {
+                    Log("Invalid den index. Cannot force activate.");
+                    return;
+                }
+
+                bool isActive = await _raidMemoryManager.ReadIsActiveFlag(index, token);
+                Log($"Den IsActive flag is currently: {isActive}");
+
+                if (!isActive)
+                {
+                    Log("Den is not marked as active in memory. Forcing IsActive flag to true...");
+                    bool flagSet = await _raidMemoryManager.SetIsActiveFlag(index, true, token);
+
+                    if (flagSet)
+                    {
+                        Log("Successfully set IsActive flag to true. Saving game...");
+                        await SaveGame(_hub.Config, token).ConfigureAwait(false);
+                        Log("Game saved. Den should now be visible.");
+                    }
+                    else
+                    {
+                        Log("Failed to set IsActive flag. Will try re-injecting seed as backup.");
+                    }
+                }
+                else
+                {
+                    Log("IsActive flag is already true, but den still not appearing. Re-injecting seed...");
+                }
+
+                var currentRaid = _settings.ActiveRaids[_currentRaidIndex];
+                var seed = uint.Parse(currentRaid.Seed, NumberStyles.AllowHexSpecifier);
+                var crystalType = currentRaid.CrystalType;
+
+                bool seedSuccess = await _raidMemoryManager.InjectSeed(index, seed, crystalType, token);
+                if (seedSuccess)
+                {
+                    Log($"Successfully re-injected seed {seed:X8} at index {index}.");
+
+                    if (!isActive)
+                    {
+                        await _raidMemoryManager.SetIsActiveFlag(index, true, token);
+                        Log("Re-applied IsActive flag after seed injection.");
+                        await SaveGame(_hub.Config, token).ConfigureAwait(false);
+                        Log("Game saved after seed injection.");
+                    }
+
+                    await Task.Delay(1_000, token).ConfigureAwait(false);
+
+                    var verifyActive = await _raidMemoryManager.ReadIsActiveFlag(index, token);
+                    var verifySeed = await _raidMemoryManager.ReadSeedAtIndex(index, token);
+                    Log($"Verification - IsActive: {verifyActive}, Seed: {verifySeed:X8}");
+                }
+                else
+                {
+                    Log($"Failed to re-inject seed during force activation.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Error during force activate recovery: {ex.Message}");
             }
         }
 
@@ -2511,6 +2618,19 @@ namespace SysBot.Pokemon.SV.BotRaid
                 {
                     Log("Failed to connect to lobby, restarting game incase we were in battle/bad connection.");
                     _lobbyError++;
+
+                    if (_seedIndexToReplace == _lastFailedDenIndex)
+                    {
+                        _consecutiveDenFailures++;
+                        Log($"Consecutive failures at den index {_seedIndexToReplace}: {_consecutiveDenFailures}");
+                    }
+                    else
+                    {
+                        _consecutiveDenFailures = 1;
+                        _lastFailedDenIndex = _seedIndexToReplace;
+                        Log($"First failure at den index {_seedIndexToReplace}");
+                    }
+
                     await ReOpenGame(_hub.Config, token).ConfigureAwait(false);
                     Log("Attempting to restart routine!");
                     return false;
