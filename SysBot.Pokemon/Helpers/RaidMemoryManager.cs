@@ -150,4 +150,50 @@ public class RaidMemoryManager(ISwitchConnectionAsync connection, ulong raidBloc
             };
         }
     }
+
+    /// <summary>
+    /// Reads the IsActive flag for a raid at the specified index.
+    /// </summary>
+    /// <param name="index">The global raid index</param>
+    /// <param name="token">Cancellation token</param>
+    /// <returns>True if the raid is marked as active in memory</returns>
+    public async Task<bool> ReadIsActiveFlag(int index, CancellationToken token)
+    {
+        try
+        {
+            var ptr = DeterminePointer(index);
+            ptr[3] += 0x18;
+            byte[] data = await _connection.PointerPeek(1, ptr, token).ConfigureAwait(false);
+            return data[0] != 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Sets the IsActive flag for a raid at the specified index.
+    /// </summary>
+    /// <param name="index">The global raid index</param>
+    /// <param name="isActive">True to mark as active, false to mark as inactive</param>
+    /// <param name="token">Cancellation token</param>
+    /// <returns>True if the operation was successful</returns>
+    public async Task<bool> SetIsActiveFlag(int index, bool isActive, CancellationToken token)
+    {
+        try
+        {
+            var ptr = DeterminePointer(index);
+            ptr[3] += 0x18;
+            byte[] flagByte = [(byte)(isActive ? 1 : 0)];
+            await _connection.PointerPoke(flagByte, ptr, token).ConfigureAwait(false);
+
+            byte[] verification = await _connection.PointerPeek(1, ptr, token).ConfigureAwait(false);
+            return verification[0] == flagByte[0];
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }
