@@ -175,17 +175,3 @@ This is helpful if your bot is in several servers and you need to let everyone k
  - If true will only run the rollovercorrection routine for you to figure out your timing
  - Run this when the game is closed.
 
-
-# All of my Projects
-
-## Showdown Alternative Website
-- https://genpkm.com - An online alternative to Showdown that has legality checks and batch trade codes built in to make genning pokemon a breeze.
-  
-## PKHeX - AIO (All-In-One)
-
-- [PKHeX-AIO](https://github.com/bdawg1989/PKHeX-ALL-IN-ONE) - A single .exe with ALM, TeraFinder, and PokeNamer plugins included.  No extra folders and plugin.dll's to keep up with.
-
-## MergeBot - The Ultimate TradeBot
-
-- [Source Code](https://github.com/bdawg1989/SysBot)
-
