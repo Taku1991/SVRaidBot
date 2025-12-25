@@ -3,8 +3,6 @@
 
 
 # Sc/Vi RaidBot
-
-![Discord Banner 2](https://discord.com/api/guilds/1369342739581505536/widget.png?style=banner2)
  
 ## Hello, and welcome to my RaidBot Project.
 
