@@ -5011,7 +5011,21 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
             var stars = raid.IsEvent ? encounter.Stars : raid.GetStarCount(raid.Difficulty, storyProgressLevel, raid.IsBlack);
             var teraType = raid.GetTeraType(encounter);
             var level = encounter.Level;
-            var pk = RaidPokemonGenerator.GenerateRaidPokemon(encounter, raid.Seed, raid.IsShiny, teraType, level);
+
+            // Generate PK9 using PKHeX's Encounter9RNG (same pattern as IsSeedReturned)
+            var pk = new PK9
+            {
+                Species = encounter.Species,
+                Form = encounter.Form,
+                Move1 = encounter.Move1,
+                Move2 = encounter.Move2,
+                Move3 = encounter.Move3,
+                Move4 = encounter.Move4,
+                TeraTypeOriginal = (MoveType)teraType,
+                CurrentLevel = (byte)level
+            };
+            var param = encounter.GetParam();
+            Encounter9RNG.GenerateData(pk, param, EncounterCriteria.Unrestricted, raid.Seed);
 
             // Get strings in the selected language
             var strings = GameInfo.GetStrings(languageId);
