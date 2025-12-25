@@ -153,6 +153,8 @@ public class RaidMemoryManager(ISwitchConnectionAsync connection, ulong raidBloc
 
     /// <summary>
     /// Reads the IsActive flag for a raid at the specified index.
+    /// IsActive (IsEnabled) is at offset 0x00 within the raid structure.
+    /// DeterminePointer returns a pointer to the Seed (offset 0x10), so we subtract 0x10.
     /// </summary>
     /// <param name="index">The global raid index</param>
     /// <param name="token">Cancellation token</param>
@@ -162,9 +164,11 @@ public class RaidMemoryManager(ISwitchConnectionAsync connection, ulong raidBloc
         try
         {
             var ptr = DeterminePointer(index);
-            ptr[3] += 0x18;
-            byte[] data = await _connection.PointerPeek(1, ptr, token).ConfigureAwait(false);
-            return data[0] != 0;
+            // IsActive is at offset 0x00, Seed is at offset 0x10, so IsActive = Seed - 0x10
+            ptr[3] -= 0x10;
+            // IsActive is a uint32 (4 bytes), value of 1 = active
+            byte[] data = await _connection.PointerPeek(4, ptr, token).ConfigureAwait(false);
+            return BitConverter.ToUInt32(data, 0) == 1;
         }
         catch
         {
@@ -174,6 +178,8 @@ public class RaidMemoryManager(ISwitchConnectionAsync connection, ulong raidBloc
 
     /// <summary>
     /// Sets the IsActive flag for a raid at the specified index.
+    /// IsActive (IsEnabled) is at offset 0x00 within the raid structure.
+    /// DeterminePointer returns a pointer to the Seed (offset 0x10), so we subtract 0x10.
     /// </summary>
     /// <param name="index">The global raid index</param>
     /// <param name="isActive">True to mark as active, false to mark as inactive</param>
@@ -184,12 +190,14 @@ public class RaidMemoryManager(ISwitchConnectionAsync connection, ulong raidBloc
         try
         {
             var ptr = DeterminePointer(index);
-            ptr[3] += 0x18;
-            byte[] flagByte = [(byte)(isActive ? 1 : 0)];
-            await _connection.PointerPoke(flagByte, ptr, token).ConfigureAwait(false);
+            // IsActive is at offset 0x00, Seed is at offset 0x10, so IsActive = Seed - 0x10
+            ptr[3] -= 0x10;
+            // IsActive is a uint32 (4 bytes), value of 1 = active, 0 = inactive
+            byte[] flagBytes = BitConverter.GetBytes(isActive ? 1u : 0u);
+            await _connection.PointerPoke(flagBytes, ptr, token).ConfigureAwait(false);
 
-            byte[] verification = await _connection.PointerPeek(1, ptr, token).ConfigureAwait(false);
-            return verification[0] == flagByte[0];
+            byte[] verification = await _connection.PointerPeek(4, ptr, token).ConfigureAwait(false);
+            return BitConverter.ToUInt32(verification, 0) == (isActive ? 1u : 0u);
         }
         catch
         {
