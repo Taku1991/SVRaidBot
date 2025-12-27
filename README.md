@@ -3,8 +3,6 @@
 
 
 # Sc/Vi RaidBot
-
-![Discord Banner 2](https://discord.com/api/guilds/1369342739581505536/widget.png?style=banner2)
  
 ## Hello, and welcome to my RaidBot Project.
 
@@ -177,108 +175,6 @@ This is helpful if your bot is in several servers and you need to let everyone k
  - If true will only run the rollovercorrection routine for you to figure out your timing
  - Run this when the game is closed.
 
-
-# All of my Projects
-
-## Showdown Alternative Website
-- https://genpkm.com - An online alternative to Showdown that has legality checks and batch trade codes built in to make genning pokemon a breeze.
-  
-## PKHeX - AIO (All-In-One)
-
-- [PKHeX-AIO](https://github.com/bdawg1989/PKHeX-ALL-IN-ONE) - A single .exe with ALM, TeraFinder, and PokeNamer plugins included.  No extra folders and plugin.dll's to keep up with.
-
-## MergeBot - The Ultimate TradeBot
-
-- [Source Code](https://github.com/bdawg1989/SysBot)
-
----
-
-# 🚀 Universal Bot Controller
-
-This RaidBot project now supports the **Universal Bot Controller System**, enabling management of both RaidBot and PokeBot through a single web interface.
-
-## ✨ Features
-
-### 🔄 Master-Slave Architecture
-- First started bot instance becomes the **Master** (Web server on port 8080)
-- Additional instances are automatically detected as **Slaves**
-- Works with any combination of RaidBot and PokeBot
-
-### 🌐 Unified Web Interface
-- Access via `http://localhost:8080/` regardless of which bot starts first
-- Visually distinguishable bot types:
-  - ⚔️ **RaidBot** (purple highlighted)
-  - 🎮 **PokeBot** (green highlighted)
-- Automatic bot type detection and display
-
-### ⚡ Universal Commands
-- **Start All** - Starts all bots of all types
-- **Stop All** - Stops all bots of all types
-- **Idle All** - Sets all bots to idle mode
-- **Refresh Map All** - RaidBot-specific function for all RaidBot instances
-
-### 🗺️ RaidBot-Specific Features
-- **Refresh Map** button only visible for RaidBot instances
-- Automatic raid map refresh across all RaidBot instances
-- RaidBot-specific update system
-
-### 🔧 Bot-Specific Features
-- Separate update systems for RaidBot and PokeBot from their respective repositories
-- Bot-specific functions are automatically enabled/disabled
-- Intelligent command routing based on bot type
-
-## 🚀 Usage
-
-### Single RaidBot:
-1. Start `SVRaidBot.exe`
-2. Open `http://localhost:8080/` (Port changed from 9090 to 8080 for compatibility)
-3. Manage your RaidBot instances
-
-### Mixed Bot Environment:
-1. Start any combination of RaidBot and PokeBot
-2. The first started bot takes over the web server role
-3. All subsequent bots are automatically detected
-4. Manage all bots through a single interface at `http://localhost:8080/`
-
-### Network Access for Universal Controller:
-```cmd
-# Admin permission for all bot types (Port 8080 instead of 9090)
-netsh http add urlacl url=http://+:8080/ user=Everyone
-
-# Firewall rule for Universal Controller (Port 8080 instead of 9090)
-netsh advfirewall firewall add rule name="Universal Bot Controller" dir=in action=allow protocol=TCP localport=8080
-```
-
-## 🔧 Technical Details
-
-### Port Standardization
-- **IMPORTANT**: RaidBot now uses **Port 8080/8081** instead of 9090/9091 for compatibility
-- Automatic collision detection and master-slave assignment
-- Cross-bot communication via port files
-
-### Bot Type Detection
-- Automatic detection via Reflection:
-  - RaidBot: `SysBot.Pokemon.SV.BotRaid.Helpers.SVRaidBot`
-  - PokeBot: `SysBot.Pokemon.Helpers.PokeBot`
-
-### Update Management
-- RaidBot: Updates from RaidBot repository
-- PokeBot: Updates from PokeBot repository
-- Automatic repository detection based on bot type
-
-### RaidBot-Specific Functions
-- Refresh Map functionality is preserved
-- Automatic detection and activation of raid-specific features
-- Compatibility with all existing RaidBot configurations
-
-## 📱 Mobile Access Update
-
-Since the port changed from 9090 to 8080, now use:
-- **New URL**: `http://YOUR-PC-IP:8080` (instead of 9090)
-- **Example**: `http://192.168.1.100:8080`
-
-The Universal Bot Controller System makes managing multiple bot instances of different types easier than ever! 🎉
-
 ---
 
 # 🌐 Tailscale Multi-Node Management
@@ -287,7 +183,7 @@ Take your bot management to the next level with **Tailscale** integration! Manag
 
 ## ✨ What is Tailscale Integration?
 
-Tailscale allows you to create a secure mesh network between your devices, enabling the Universal Bot Controller to manage bots running on different computers across the internet as if they were on the same local network.
+Tailscale allows you to create a secure mesh network between your devices, enabling remote management of bots running on different computers across the internet as if they were on the same local network.
 
 ### 🔑 Key Benefits
 - **Remote Management**: Control bots on multiple computers from one dashboard
@@ -372,7 +268,7 @@ The port allocation system prevents conflicts when running multiple bot instance
   "Enabled": true,
   "NodeAllocations": {
     "100.x.x.x": { "Start": 8081, "End": 8090 },  // Master: 10 ports
-    "100.x.x.x": { "Start": 8091, "End": 8100 },  // Slave 1: 10 ports  
+    "100.x.x.x": { "Start": 8091, "End": 8100 },  // Slave 1: 10 ports
     "100.x.x.x": { "Start": 8101, "End": 8110 }    // Slave 2: 10 ports
   }
 }
@@ -383,21 +279,21 @@ The port allocation system prevents conflicts when running multiple bot instance
 ### Basic 2-Node Setup
 **Computer 1 (Master)** - Main gaming PC:
 - Tailscale IP: `100.x.x.x`
-- Runs web dashboard on port 8080
+- Runs web dashboard on port 9090
 - Manages 5 local bots on ports 8081-8085
 
 **Computer 2 (Slave)** - Dedicated server:
-- Tailscale IP: `100.x.x.x`  
+- Tailscale IP: `100.x.x.x`
 - Runs 10 bots on ports 8091-8100
 - No local web interface needed
 
-**Access**: Go to `http://100.x.x.x:8080` from any device on your Tailscale network
+**Access**: Go to `http://100.x.x.x:9090` from any device on your Tailscale network
 
 ### Advanced Multi-Node Setup
 **Server Farm Configuration**:
 - **Master Node**: Dashboard + 5 bots (ports 8081-8085)
-- **Slave Node 1**: 10 PokeBot instances (ports 8091-8100)
-- **Slave Node 2**: 10 RaidBot instances (ports 8101-8110)
+- **Slave Node 1**: 10 bots (ports 8091-8100)
+- **Slave Node 2**: 10 bots (ports 8101-8110)
 - **Slave Node 3**: Additional capacity (ports 8111-8120)
 
 ## 🔧 Network Requirements
@@ -411,12 +307,12 @@ Each node needs appropriate firewall rules:
 netsh advfirewall firewall add rule name="Bot Ports" dir=in action=allow protocol=TCP localport=8081-8110
 
 # Master node also needs web server port
-netsh advfirewall firewall add rule name="Bot Dashboard" dir=in action=allow protocol=TCP localport=8080
+netsh advfirewall firewall add rule name="Bot Dashboard" dir=in action=allow protocol=TCP localport=9090
 ```
 
 ### Port Planning
-- **Web Dashboard**: 8080 (master node only)
-- **Bot Instances**: 8081+ (configurable ranges per node)
+- **Web Dashboard**: 9090 (master node only)
+- **Bot Instances**: 9091+ (configurable ranges per node)
 - **Tailscale**: Automatic (usually UDP 41641)
 
 ## 📊 Dashboard Features
@@ -445,13 +341,13 @@ The master dashboard displays all nodes with:
 4. Verify JSON configuration syntax
 
 **Connection timeouts:**
-1. Check if ports are in use: `netstat -an | findstr :8081`
+1. Check if ports are in use: `netstat -an | findstr :9091`
 2. Verify bot is actually running on expected port
-3. Test manual connection: `telnet 100.x.x.x 8081`
+3. Test manual connection: `telnet 100.x.x.x 9091`
 
 **Master node not starting:**
 1. Ensure `IsMasterNode: true` is set
-2. Check that port 8080 is available
+2. Check that port 9090 is available
 3. Verify admin permissions for network access
 
 ### Debug Information
@@ -476,4 +372,3 @@ Enable verbose logging to troubleshoot:
 - Monitor access logs for suspicious activity
 
 The Tailscale integration transforms your bot network into a powerful distributed system! 🚀
-

@@ -117,6 +117,20 @@ namespace SysBot.Pokemon.SV.BotRaid
         private const string MysteryRaidTitle = "Mystery Shiny Raid";
         private const string UserRequestedRaidSuffix = "'s Requested Raid";
 
+        // Region boundary constants for raid index calculations
+        private const int PaldeaRaidCount = 69;
+        private const int KitakamiRaidCount = 25;
+        private const int KitakamiStartIndex = PaldeaRaidCount;
+        private const int BlueberryStartIndex = PaldeaRaidCount + KitakamiRaidCount;
+
+        // Cached den locations to avoid repeated JSON loading
+        private static readonly Lazy<Dictionary<string, float[]>> CachedPaldeaDenLocations = new(() =>
+            LoadDenLocations("SysBot.Pokemon.SV.BotRaid.DenLocations.den_locations_base.json"));
+        private static readonly Lazy<Dictionary<string, float[]>> CachedKitakamiDenLocations = new(() =>
+            LoadDenLocations("SysBot.Pokemon.SV.BotRaid.DenLocations.den_locations_kitakami.json"));
+        private static readonly Lazy<Dictionary<string, float[]>> CachedBlueberryDenLocations = new(() =>
+            LoadDenLocations("SysBot.Pokemon.SV.BotRaid.DenLocations.den_locations_blueberry.json"));
+
         /// <summary>
         /// Main execution loop for the raid bot
         /// </summary>
@@ -2381,7 +2395,6 @@ namespace SysBot.Pokemon.SV.BotRaid
                 return 2;
             }
 
-            _ = _settings.ActiveRaids[_currentRaidIndex];
             var currentSeed = _settings.ActiveRaids[_currentRaidIndex].Seed.ToUpper();
 
             if (!_denHexSeed.Equals(currentSeed, StringComparison.CurrentCultureIgnoreCase))
@@ -3060,7 +3073,7 @@ namespace SysBot.Pokemon.SV.BotRaid
             }
         }
 
-        private readonly Dictionary<string, string> _typeAdvantages = new()
+        private static readonly Dictionary<string, string> TypeAdvantages = new()
         {
             { "normal", "Fighting" },
             { "fire", "Water, Ground, Rock" },
@@ -3089,7 +3102,7 @@ namespace SysBot.Pokemon.SV.BotRaid
         {
             string englishTypeName = GetEnglishTypeNameFromLocalized(teraType);
 
-            if (_typeAdvantages.TryGetValue(englishTypeName.ToLower(), out string advantage))
+            if (TypeAdvantages.TryGetValue(englishTypeName.ToLower(), out string? advantage))
             {
                 return advantage;
             }
@@ -3101,7 +3114,7 @@ namespace SysBot.Pokemon.SV.BotRaid
         /// </summary>
         private string GetEnglishTypeNameFromLocalized(string teraType)
         {
-            if (_typeAdvantages.ContainsKey(teraType.ToLower()))
+            if (TypeAdvantages.ContainsKey(teraType.ToLower()))
                 return teraType.ToLower();
             var englishStrings = GameInfo.GetStrings(2);
             var localizedStrings = GameInfo.GetStrings((int)_settings.EmbedToggles.EmbedLanguage);
@@ -4254,6 +4267,20 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
         }
 
         /// <summary>
+        /// Gets cached den locations for the specified map type
+        /// </summary>
+        private static Dictionary<string, float[]> GetCachedDenLocations(TeraRaidMapParent mapType)
+        {
+            return mapType switch
+            {
+                TeraRaidMapParent.Paldea => CachedPaldeaDenLocations.Value,
+                TeraRaidMapParent.Kitakami => CachedKitakamiDenLocations.Value,
+                TeraRaidMapParent.Blueberry => CachedBlueberryDenLocations.Value,
+                _ => throw new ArgumentException("Invalid map type", nameof(mapType))
+            };
+        }
+
+        /// <summary>
         /// Finds the nearest den location to the player
         /// </summary>
         private static string FindNearestLocation((float, float, float) playerLocation, Dictionary<string, float[]> denLocations)
@@ -4377,10 +4404,10 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
         {
             var playerLocation = await GetPlayersLocation(token);
 
-            // Load den locations for all regions
-            var blueberryLocations = LoadDenLocations("SysBot.Pokemon.SV.BotRaid.DenLocations.den_locations_blueberry.json");
-            var kitakamiLocations = LoadDenLocations("SysBot.Pokemon.SV.BotRaid.DenLocations.den_locations_kitakami.json");
-            var baseLocations = LoadDenLocations("SysBot.Pokemon.SV.BotRaid.DenLocations.den_locations_base.json");
+            // Use cached den locations for all regions
+            var blueberryLocations = GetCachedDenLocations(TeraRaidMapParent.Blueberry);
+            var kitakamiLocations = GetCachedDenLocations(TeraRaidMapParent.Kitakami);
+            var baseLocations = GetCachedDenLocations(TeraRaidMapParent.Paldea);
 
             // Find the nearest location for each set and keep track of the overall nearest
             var nearestDen = new Dictionary<string, string>
@@ -4394,15 +4421,15 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
             .Where(kv => !string.IsNullOrEmpty(kv.Value))
             .Select(kv =>
             {
-                Dictionary<string, float[]>? denLocations = kv.Key switch
+                var denLocations = GetCachedDenLocations(kv.Key switch
                 {
-                    "Blueberry" => blueberryLocations,
-                    "Kitakami" => kitakamiLocations,
-                    "Paldea" => baseLocations,
-                    _ => null
-                };
+                    "Blueberry" => TeraRaidMapParent.Blueberry,
+                    "Kitakami" => TeraRaidMapParent.Kitakami,
+                    "Paldea" => TeraRaidMapParent.Paldea,
+                    _ => TeraRaidMapParent.Paldea
+                });
 
-                if (denLocations == null || !denLocations.TryGetValue(kv.Value, out var denLocationArray))
+                if (!denLocations.TryGetValue(kv.Value, out var denLocationArray))
                     return null;
 
                 var denLocationTuple = (denLocationArray[0], denLocationArray[1], denLocationArray[2]);
@@ -4479,13 +4506,8 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
             // Read the raw raid data for the region
             byte[] raidData = await ReadRaidsForRegion(mapType, token);
 
-            Dictionary<string, float[]> denLocations = mapType switch
-            {
-                TeraRaidMapParent.Paldea => LoadDenLocations("SysBot.Pokemon.SV.BotRaid.DenLocations.den_locations_base.json"),
-                TeraRaidMapParent.Kitakami => LoadDenLocations("SysBot.Pokemon.SV.BotRaid.DenLocations.den_locations_kitakami.json"),
-                TeraRaidMapParent.Blueberry => LoadDenLocations("SysBot.Pokemon.SV.BotRaid.DenLocations.den_locations_blueberry.json"),
-                _ => throw new InvalidOperationException("Invalid region")
-            };
+            // Use cached den locations
+            var denLocations = GetCachedDenLocations(mapType);
 
             var activeRaids = new List<(string DenIdentifier, float[] Coordinates, int Index, uint Seed, uint Flags, bool IsEvent)>();
 
@@ -4493,8 +4515,8 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
             int startingIndex = mapType switch
             {
                 TeraRaidMapParent.Paldea => 0,
-                TeraRaidMapParent.Kitakami => 69,
-                TeraRaidMapParent.Blueberry => 94,
+                TeraRaidMapParent.Kitakami => KitakamiStartIndex,
+                TeraRaidMapParent.Blueberry => BlueberryStartIndex,
                 _ => 0
             };
 
@@ -4533,48 +4555,19 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
             if (Connection is null)
                 return;
 
-            if (progress >= GameProgress.Unlocked3Stars)
+            var difficultyBlocks = new[]
             {
-                var toexpect = (bool?)await ReadBlock(RaidDataBlocks.KUnlockedRaidDifficulty3, CancellationToken.None);
-                await WriteBlock(true, RaidDataBlocks.KUnlockedRaidDifficulty3, CancellationToken.None, toexpect);
-            }
-            else
-            {
-                var toexpect = (bool?)await ReadBlock(RaidDataBlocks.KUnlockedRaidDifficulty3, CancellationToken.None);
-                await WriteBlock(false, RaidDataBlocks.KUnlockedRaidDifficulty3, CancellationToken.None, toexpect);
-            }
+                (GameProgress.Unlocked3Stars, RaidDataBlocks.KUnlockedRaidDifficulty3),
+                (GameProgress.Unlocked4Stars, RaidDataBlocks.KUnlockedRaidDifficulty4),
+                (GameProgress.Unlocked5Stars, RaidDataBlocks.KUnlockedRaidDifficulty5),
+                (GameProgress.Unlocked6Stars, RaidDataBlocks.KUnlockedRaidDifficulty6),
+            };
 
-            if (progress >= GameProgress.Unlocked4Stars)
+            foreach (var (requiredProgress, block) in difficultyBlocks)
             {
-                var toexpect = (bool?)await ReadBlock(RaidDataBlocks.KUnlockedRaidDifficulty4, CancellationToken.None);
-                await WriteBlock(true, RaidDataBlocks.KUnlockedRaidDifficulty4, CancellationToken.None, toexpect);
-            }
-            else
-            {
-                var toexpect = (bool?)await ReadBlock(RaidDataBlocks.KUnlockedRaidDifficulty4, CancellationToken.None);
-                await WriteBlock(false, RaidDataBlocks.KUnlockedRaidDifficulty4, CancellationToken.None, toexpect);
-            }
-
-            if (progress >= GameProgress.Unlocked5Stars)
-            {
-                var toexpect = (bool?)await ReadBlock(RaidDataBlocks.KUnlockedRaidDifficulty5, CancellationToken.None);
-                await WriteBlock(true, RaidDataBlocks.KUnlockedRaidDifficulty5, CancellationToken.None, toexpect);
-            }
-            else
-            {
-                var toexpect = (bool?)await ReadBlock(RaidDataBlocks.KUnlockedRaidDifficulty5, CancellationToken.None);
-                await WriteBlock(false, RaidDataBlocks.KUnlockedRaidDifficulty5, CancellationToken.None, toexpect);
-            }
-
-            if (progress >= GameProgress.Unlocked6Stars)
-            {
-                var toexpect = (bool?)await ReadBlock(RaidDataBlocks.KUnlockedRaidDifficulty6, CancellationToken.None);
-                await WriteBlock(true, RaidDataBlocks.KUnlockedRaidDifficulty6, CancellationToken.None, toexpect);
-            }
-            else
-            {
-                var toexpect = (bool?)await ReadBlock(RaidDataBlocks.KUnlockedRaidDifficulty6, CancellationToken.None);
-                await WriteBlock(false, RaidDataBlocks.KUnlockedRaidDifficulty6, CancellationToken.None, toexpect);
+                bool shouldUnlock = progress >= requiredProgress;
+                var toexpect = (bool?)await ReadBlock(block, CancellationToken.None);
+                await WriteBlock(shouldUnlock, block, CancellationToken.None, toexpect);
             }
         }
 
@@ -4896,6 +4889,11 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
 
         private static (PK9, uint) IsSeedReturned(ITeraRaid encounter, Raid raid)
         {
+            var shiny = raid.IsShiny ? Shiny.Always : Shiny.Never;
+            var gender = PersonalTable.SV.GetFormEntry(encounter.Species, encounter.Form).Gender;
+            var param = new GenerateParam9(encounter.Species, gender, encounter.FlawlessIVCount, 1, 0, 0,
+                SizeType9.RANDOM, 0, encounter.Ability, shiny);
+
             var pk = new PK9
             {
                 Species = encounter.Species,
@@ -4905,12 +4903,7 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
                 Move3 = encounter.Move3,
                 Move4 = encounter.Move4,
             };
-
-            if (raid.IsShiny) pk.SetIsShiny(true);
-
-            var param = encounter.GetParam();
             Encounter9RNG.GenerateData(pk, param, EncounterCriteria.Unrestricted, raid.Seed);
-
             return (pk, raid.Seed);
         }
 
@@ -4919,15 +4912,11 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
         /// </summary>
         private async Task FindSeedIndexInRaids(uint denHexSeedUInt, CancellationToken token)
         {
-            const int kitakamiDensCount = 25;
-            int upperBound = kitakamiDensCount == 25 ? 94 : 95;
-            int startIndex = kitakamiDensCount == 25 ? 94 : 95;
-
             // Search in Paldea region
             var dataP = await SwitchConnection.ReadBytesAbsoluteAsync(_raidBlockPointerP, 2304, token).ConfigureAwait(false);
-            for (int i = 0; i < 69; i++)
+            for (int i = 0; i < PaldeaRaidCount; i++)
             {
-                var seed = BitConverter.ToUInt32(dataP.AsSpan(0x20 + i * 0x20, 4));
+                var seed = BitConverter.ToUInt32(dataP.AsSpan(Raid.SIZE + i * Raid.SIZE, 4));
                 if (seed == denHexSeedUInt)
                 {
                     _seedIndexToReplace = i;
@@ -4937,21 +4926,21 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
 
             // Search in Kitakami region
             var dataK = await SwitchConnection.ReadBytesAbsoluteAsync(_raidBlockPointerK + 0x10, 0xC80, token).ConfigureAwait(false);
-            for (int i = 0; i < upperBound; i++)
+            for (int i = 0; i < BlueberryStartIndex; i++)
             {
-                var seed = BitConverter.ToUInt32(dataK.AsSpan(i * 0x20, 4));
+                var seed = BitConverter.ToUInt32(dataK.AsSpan(i * Raid.SIZE, 4));
                 if (seed == denHexSeedUInt)
                 {
-                    _seedIndexToReplace = i + 69;
+                    _seedIndexToReplace = i + KitakamiStartIndex;
                     return;
                 }
             }
 
             // Search in Blueberry region
             var dataB = await SwitchConnection.ReadBytesAbsoluteAsync(_raidBlockPointerB + 0x10, 0xA00, token).ConfigureAwait(false);
-            for (int i = startIndex; i < 118; i++)
+            for (int i = BlueberryStartIndex; i < 118; i++)
             {
-                var seed = BitConverter.ToUInt32(dataB.AsSpan((i - startIndex) * 0x20, 4));
+                var seed = BitConverter.ToUInt32(dataB.AsSpan((i - BlueberryStartIndex) * Raid.SIZE, 4));
                 if (seed == denHexSeedUInt)
                 {
                     _seedIndexToReplace = i - 1;
@@ -5011,7 +5000,25 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
             var stars = raid.IsEvent ? encounter.Stars : raid.GetStarCount(raid.Difficulty, storyProgressLevel, raid.IsBlack);
             var teraType = raid.GetTeraType(encounter);
             var level = encounter.Level;
-            var pk = RaidPokemonGenerator.GenerateRaidPokemon(encounter, raid.Seed, raid.IsShiny, teraType, level);
+
+            // Create GenerateParam9 with explicit shiny state to bypass early-return check in GenerateData
+            var shiny = raid.IsShiny ? Shiny.Always : Shiny.Never;
+            var gender = PersonalTable.SV.GetFormEntry(encounter.Species, encounter.Form).Gender;
+            var param = new GenerateParam9(encounter.Species, gender, encounter.FlawlessIVCount, 1, 0, 0,
+                SizeType9.RANDOM, 0, encounter.Ability, shiny);
+
+            var pk = new PK9
+            {
+                Species = encounter.Species,
+                Form = encounter.Form,
+                Move1 = encounter.Move1,
+                Move2 = encounter.Move2,
+                Move3 = encounter.Move3,
+                Move4 = encounter.Move4,
+                TeraTypeOriginal = (MoveType)teraType,
+                CurrentLevel = (byte)level
+            };
+            Encounter9RNG.GenerateData(pk, param, EncounterCriteria.Unrestricted, raid.Seed);
 
             // Get strings in the selected language
             var strings = GameInfo.GetStrings(languageId);
