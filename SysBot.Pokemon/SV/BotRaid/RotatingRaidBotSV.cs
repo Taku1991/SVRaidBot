@@ -4889,6 +4889,11 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
 
         private static (PK9, uint) IsSeedReturned(ITeraRaid encounter, Raid raid)
         {
+            var shiny = raid.IsShiny ? Shiny.Always : Shiny.Never;
+            var gender = PersonalTable.SV.GetFormEntry(encounter.Species, encounter.Form).Gender;
+            var param = new GenerateParam9(encounter.Species, gender, encounter.FlawlessIVCount, 1, 0, 0,
+                SizeType9.RANDOM, 0, encounter.Ability, shiny);
+
             var pk = new PK9
             {
                 Species = encounter.Species,
@@ -4898,12 +4903,7 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
                 Move3 = encounter.Move3,
                 Move4 = encounter.Move4,
             };
-
-            if (raid.IsShiny) pk.SetIsShiny(true);
-
-            var param = encounter.GetParam();
             Encounter9RNG.GenerateData(pk, param, EncounterCriteria.Unrestricted, raid.Seed);
-
             return (pk, raid.Seed);
         }
 
@@ -5001,7 +5001,12 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
             var teraType = raid.GetTeraType(encounter);
             var level = encounter.Level;
 
-            // Generate PK9 using PKHeX's Encounter9RNG (same pattern as IsSeedReturned)
+            // Create GenerateParam9 with explicit shiny state to bypass early-return check in GenerateData
+            var shiny = raid.IsShiny ? Shiny.Always : Shiny.Never;
+            var gender = PersonalTable.SV.GetFormEntry(encounter.Species, encounter.Form).Gender;
+            var param = new GenerateParam9(encounter.Species, gender, encounter.FlawlessIVCount, 1, 0, 0,
+                SizeType9.RANDOM, 0, encounter.Ability, shiny);
+
             var pk = new PK9
             {
                 Species = encounter.Species,
@@ -5013,7 +5018,6 @@ ALwkMx63fBR0pKs+jJ8DcFrcJR50aVv1jfIAQpPIK5G6Dk/4hmV12Hdu5sSGLl40
                 TeraTypeOriginal = (MoveType)teraType,
                 CurrentLevel = (byte)level
             };
-            var param = encounter.GetParam();
             Encounter9RNG.GenerateData(pk, param, EncounterCriteria.Unrestricted, raid.Seed);
 
             // Get strings in the selected language
